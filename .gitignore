@@ -1,0 +1,15 @@
+# .gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+venv/
+
+# Secrets (NEVER COMMIT THESE)
+.env
+keys/
+*.pem
+*.key
+
+# OS Files
+.DS_Store
