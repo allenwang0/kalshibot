@@ -1,10 +1,26 @@
 import time
 import base64
+import random
+import uuid
 import requests
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization
 from src.config import settings
+
+# Kalshi returns 429 when rate limited, with no Retry-After header, and
+# recommends exponential backoff. https://docs.kalshi.com/getting_started/rate_limits
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_RETRIES = 3
+BACKOFF_BASE = 0.5  # seconds
+BACKOFF_CAP = 8.0  # seconds
+
+
+class KalshiAPIError(Exception):
+    def __init__(self, status: int, body: str):
+        super().__init__(f"Kalshi API error {status}: {body}")
+        self.status = status
+        self.body = body
 
 
 class KalshiClient:
@@ -13,6 +29,7 @@ class KalshiClient:
         self.base_url = settings.BASE_URL
         self.key_id = settings.API_KEY_ID
         self.private_key = None
+        self._sleep = time.sleep
 
     def _load_private_key(self):
         if not settings.PRIVATE_KEY_PATH:
@@ -45,23 +62,32 @@ class KalshiClient:
         return endpoint.startswith('/portfolio') or bool(self.key_id and settings.PRIVATE_KEY_PATH)
 
     def request(self, method: str, endpoint: str, params=None, data=None):
-        headers = {'Content-Type': 'application/json'}
-        if self._needs_auth(endpoint):
-            timestamp = str(int(time.time() * 1000))
-            path_for_sign = f'/trade-api/v2{endpoint}'
-            headers.update({
-                'KALSHI-ACCESS-KEY': self.key_id,
-                'KALSHI-ACCESS-TIMESTAMP': timestamp,
-                'KALSHI-ACCESS-SIGNATURE': self._sign_request(method, path_for_sign, timestamp),
-            })
-
+        """Send a request, retrying 429, 5xx and connection errors with capped
+        exponential backoff and full jitter. Raises KalshiAPIError on failure."""
         url = f"{self.base_url}{endpoint}"
-        response = self.session.request(method, url, headers=headers, params=params, json=data)
+        for attempt in range(MAX_RETRIES + 1):
+            headers = {'Content-Type': 'application/json'}
+            if self._needs_auth(endpoint):
+                timestamp = str(int(time.time() * 1000))
+                path_for_sign = f'/trade-api/v2{endpoint}'
+                headers.update({
+                    'KALSHI-ACCESS-KEY': self.key_id,
+                    'KALSHI-ACCESS-TIMESTAMP': timestamp,
+                    'KALSHI-ACCESS-SIGNATURE': self._sign_request(method, path_for_sign, timestamp),
+                })
 
-        if response.status_code not in [200, 201]:
-            print(f"[API ERROR] {response.status_code}: {response.text}")
-            return None
-        return response.json()
+            last_try = attempt == MAX_RETRIES
+            try:
+                response = self.session.request(method, url, headers=headers, params=params, json=data)
+            except (requests.ConnectionError, requests.Timeout):
+                if last_try:
+                    raise
+            else:
+                if 200 <= response.status_code < 300:
+                    return response.json() if response.text else {}
+                if response.status_code not in RETRY_STATUSES or last_try:
+                    raise KalshiAPIError(response.status_code, response.text)
+            self._sleep(random.uniform(0, min(BACKOFF_CAP, BACKOFF_BASE * 2 ** attempt)))
 
     def get_market_orderbook(self, ticker: str):
         return self.request('GET', f'/markets/{ticker}/orderbook')
@@ -80,10 +106,9 @@ class KalshiClient:
                 return markets
 
     def get_balance(self):
+        # balance is in cents. https://docs.kalshi.com/api-reference/portfolio/get-balance
         data = self.request('GET', '/portfolio/balance')
-        if data:
-            return data.get('balance', 0) / 100.0
-        return 0.0
+        return data['balance'] / 100.0
 
     def get_positions(self) -> dict:
         """Dollars at risk (cost basis) per market ticker.
@@ -111,11 +136,13 @@ class KalshiClient:
                             params={'market_ticker': ticker})
 
     def place_order(self, ticker: str, side: str, count: int, price: int):
+        # One client_order_id per order, reused by request() retries, so a retried
+        # POST cannot create a second order. Send only the price for this side.
         payload = {
             "action": "buy", "type": "limit", "side": side,
             "ticker": ticker, "count": count,
-            "yes_price": price if side == 'yes' else None,
-            "no_price": price if side == 'no' else None,
-            "buy_max_cost": count * price
+            f"{side}_price": price,
+            "buy_max_cost": count * price,
+            "client_order_id": str(uuid.uuid4()),
         }
         return self.request('POST', '/portfolio/orders', data=payload)
