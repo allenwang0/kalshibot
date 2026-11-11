@@ -39,11 +39,12 @@ def test_live_cancels_resting_orders_and_buys_only_the_difference(monkeypatch):
             self.cancelled.append(order_id)
 
     from src.executor import LiveExecutor
+
     client = LiveFake()
     bot = engine.TradingBot(client=client, executor=LiveExecutor(client), alpha=FakeAlpha())
     bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
     assert client.cancelled == ["o1"]
-    (_, _, count, price), = client.live_orders
+    ((_, _, count, price),) = client.live_orders
     # target is capped at MAX_POSITION_SIZE dollars; $50 is already held
     assert count * price / 100 <= settings.MAX_POSITION_SIZE - 50.0
 
@@ -61,8 +62,12 @@ def test_exposure_caps_hold_over_random_books_and_bankrolls(tmp_path):
             def get_market_orderbook(self, ticker):
                 bid = rng.randint(1, 97)
                 ask = rng.randint(bid + 1, 99)
-                return {"orderbook": {"yes": [[bid, rng.randint(1, 5000)]],
-                                      "no": [[100 - ask, rng.randint(1, 5000)]]}}
+                return {
+                    "orderbook": {
+                        "yes": [[bid, rng.randint(1, 5000)]],
+                        "no": [[100 - ask, rng.randint(1, 5000)]],
+                    }
+                }
 
         ex = PaperExecutor(":memory:", bankroll)
         bot = engine.TradingBot(client=RandomClient(), executor=ex, alpha=FakeAlpha(rng.random()))

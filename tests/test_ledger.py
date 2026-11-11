@@ -5,8 +5,12 @@ from src.client import TokenBucket
 from src.executor import PaperExecutor
 from tests.fakes import FakeAlpha, FakeClient
 
-MARKET = {"ticker": "KXFED-26DEC-T3.50", "strike_type": "greater", "floor_strike": 3.5,
-          "close_time": "2026-12-09T19:00:00Z"}
+MARKET = {
+    "ticker": "KXFED-26DEC-T3.50",
+    "strike_type": "greater",
+    "floor_strike": 3.5,
+    "close_time": "2026-12-09T19:00:00Z",
+}
 
 
 def test_every_market_is_logged_each_cycle_with_model_and_book():

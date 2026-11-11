@@ -1,6 +1,7 @@
 """Request shapes for the current Kalshi API. Expected values come from
 https://docs.kalshi.com/openapi.yaml (CreateOrderV2Request, CancelOrderV2) and
 https://docs.kalshi.com/getting_started/api_keys. No network."""
+
 import base64
 
 import pytest
@@ -20,8 +21,9 @@ def test_default_host_is_the_documented_production_server():
 
 
 def test_order_uses_create_order_v2_with_dollar_strings():
-    c = _client(_Resp(201, {"order_id": "x", "fill_count": "0.00",
-                            "remaining_count": "3.00", "ts_ms": 1}))
+    c = _client(
+        _Resp(201, {"order_id": "x", "fill_count": "0.00", "remaining_count": "3.00", "ts_ms": 1})
+    )
     c.place_order("KXFED-26DEC-T3.75", "yes", 3, 48)
     call = c.session.calls[0]
     assert call["method"] == "POST"
@@ -29,13 +31,18 @@ def test_order_uses_create_order_v2_with_dollar_strings():
     body = dict(call["json"])
     body.pop("client_order_id")
     assert body == {
-        "ticker": "KXFED-26DEC-T3.75", "side": "bid", "count": "3.00", "price": "0.4800",
-        "time_in_force": "good_till_canceled", "self_trade_prevention_type": "taker_at_cross",
+        "ticker": "KXFED-26DEC-T3.75",
+        "side": "bid",
+        "count": "3.00",
+        "price": "0.4800",
+        "time_in_force": "good_till_canceled",
+        "self_trade_prevention_type": "taker_at_cross",
     }
 
 
-@pytest.mark.parametrize("side,count,price", [("no", 1, 50), ("yes", 0, 50),
-                                              ("yes", 1, 0), ("yes", 1, 100)])
+@pytest.mark.parametrize(
+    "side,count,price", [("no", 1, 50), ("yes", 0, 50), ("yes", 1, 0), ("yes", 1, 100)]
+)
 def test_order_outside_the_bot_strategy_is_refused_before_any_request(side, count, price):
     c = _client()
     with pytest.raises(ValueError):
@@ -47,7 +54,10 @@ def test_cancel_uses_v2_path_with_market_ticker_for_routing():
     c = _client(_Resp(200, {"order_id": "o1", "client_order_id": "", "reduced_by": "3.00"}))
     c.cancel_order("o1", "KXFED-X")
     call = c.session.calls[0]
-    assert (call["method"], call["url"]) == ("DELETE", settings.BASE_URL + "/portfolio/events/orders/o1")
+    assert (call["method"], call["url"]) == (
+        "DELETE",
+        settings.BASE_URL + "/portfolio/events/orders/o1",
+    )
 
 
 def _signed_headers(key, endpoint, params=None):
@@ -72,7 +82,8 @@ def test_rsa_signature_uses_digest_length_salt_and_full_path_without_query():
     h = _signed_headers(key, "/portfolio/orders", params={"status": "resting"})
     message = (h["KALSHI-ACCESS-TIMESTAMP"] + "GET" + "/trade-api/v2/portfolio/orders").encode()
     key.public_key().verify(
-        base64.b64decode(h["KALSHI-ACCESS-SIGNATURE"]), message,
+        base64.b64decode(h["KALSHI-ACCESS-SIGNATURE"]),
+        message,
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.DIGEST_LENGTH),
         hashes.SHA256(),
     )

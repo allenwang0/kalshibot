@@ -69,8 +69,10 @@ def test_4xx_is_not_retried():
 
 def test_retried_order_reuses_one_client_order_id_and_sends_one_price():
     # A retried POST must carry the same client_order_id so it cannot fill twice.
-    c = _client(_Resp(502), _Resp(201, {"order_id": "x", "fill_count": "0.00",
-                                        "remaining_count": "3.00", "ts_ms": 1}))
+    c = _client(
+        _Resp(502),
+        _Resp(201, {"order_id": "x", "fill_count": "0.00", "remaining_count": "3.00", "ts_ms": 1}),
+    )
     c.place_order("KXFED-TEST", "yes", 3, 48)
     first, second = (call["json"] for call in c.session.calls)
     assert first["client_order_id"] and first["client_order_id"] == second["client_order_id"]
@@ -79,10 +81,24 @@ def test_retried_order_reuses_one_client_order_id_and_sends_one_price():
 def test_portfolio_and_market_calls_parse_documented_shapes():
     # Fabricated values in the documented response shapes; cursors page through.
     c = _client(
-        _Resp(200, {"market_positions": [{"ticker": "A", "position_fp": "10.00",
-                                          "market_exposure_dollars": "4.800000"}], "cursor": "n"}),
-        _Resp(200, {"market_positions": [{"ticker": "B", "position_fp": "2.00",
-                                          "market_exposure_dollars": "1.000000"}], "cursor": ""}),
+        _Resp(
+            200,
+            {
+                "market_positions": [
+                    {"ticker": "A", "position_fp": "10.00", "market_exposure_dollars": "4.800000"}
+                ],
+                "cursor": "n",
+            },
+        ),
+        _Resp(
+            200,
+            {
+                "market_positions": [
+                    {"ticker": "B", "position_fp": "2.00", "market_exposure_dollars": "1.000000"}
+                ],
+                "cursor": "",
+            },
+        ),
         _Resp(200, {"orders": [{"order_id": "o1", "ticker": "A"}]}),
         _Resp(200, {}),
         _Resp(200, {"markets": [{"ticker": "KXFED-X"}], "cursor": ""}),
@@ -98,6 +114,7 @@ def test_portfolio_and_market_calls_parse_documented_shapes():
 def test_every_request_has_a_timeout_so_a_stalled_socket_is_retried():
     # requests waits forever by default; a hung Kalshi connection froze the bot.
     import requests
+
     c = _client(requests.Timeout("stalled"), _Resp(200, {"balance": 1234}))
     assert c.get_balance() == 12.34
     assert all(call["timeout"] for call in c.session.calls)

@@ -15,9 +15,14 @@ log = logging.getLogger(__name__)
 
 
 class TradingBot:
-    def __init__(self, client: Any = None, executor: Executor | None = None,
-                 alpha: Any = None, risk: RiskManager | None = None,
-                 ledger: Ledger | None = None):
+    def __init__(
+        self,
+        client: Any = None,
+        executor: Executor | None = None,
+        alpha: Any = None,
+        risk: RiskManager | None = None,
+        ledger: Ledger | None = None,
+    ):
         self.client = client or KalshiClient()
         if ledger is None:
             ledger = executor.ledger if isinstance(executor, PaperExecutor) else None
@@ -29,8 +34,9 @@ class TradingBot:
     def _fetch_books(self, tickers: list[str]) -> dict[str, Book | None]:
         # The client's token bucket keeps concurrent requests under the rate limit.
         with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
-            books = pool.map(lambda t: parse_orderbook(self.client.get_market_orderbook(t)),
-                             tickers)
+            books = pool.map(
+                lambda t: parse_orderbook(self.client.get_market_orderbook(t)), tickers
+            )
             return dict(zip(tickers, books, strict=True))
 
     def run_cycle(self, markets: list[dict[str, Any]] | None = None) -> None:
@@ -58,14 +64,19 @@ class TradingBot:
             fair_prob = self.alpha.calculate_fair_value(market)
             meeting = meeting_date(market)
             row: dict[str, Any] = {
-                "ts": ts, "mode": settings.TRADING_MODE, "ticker": ticker,
+                "ts": ts,
+                "mode": settings.TRADING_MODE,
+                "ticker": ticker,
                 "strike": market.get("floor_strike"),
                 "meeting_date": meeting.isoformat() if meeting else None,
                 "model_p": fair_prob,
             }
             if book is not None:
-                row.update(best_bid=book.best_yes_bid, best_ask=book.best_yes_ask,
-                           mid=(book.best_yes_bid + book.best_yes_ask) / 200.0)
+                row.update(
+                    best_bid=book.best_yes_bid,
+                    best_ask=book.best_yes_ask,
+                    mid=(book.best_yes_bid + book.best_yes_ask) / 200.0,
+                )
             if book is None:
                 row["action"] = "skip: empty book side"
             elif book.spread > settings.MAX_SPREAD_CENTS:
@@ -86,15 +97,21 @@ class TradingBot:
                 while count > 0 and count * price + taker_fee(count, price) > cash:
                     count -= 1
                 if count > 0:
-                    self.executor.place_order(ticker, "yes", count, book.best_yes_ask,
-                                              model_p=fair_prob)
+                    self.executor.place_order(
+                        ticker, "yes", count, book.best_yes_ask, model_p=fair_prob
+                    )
                     cost = count * price
                     positions[ticker] = held + cost
                     total_exposure += cost
                     cash -= cost + taker_fee(count, price)
                     row["action"] = f"buy {count}"
-                    log.info("%s buy %d at %d cents, model %.3f", ticker, count,
-                             book.best_yes_ask, fair_prob)
+                    log.info(
+                        "%s buy %d at %d cents, model %.3f",
+                        ticker,
+                        count,
+                        book.best_yes_ask,
+                        fair_prob,
+                    )
                 else:
                     row["action"] = "hold"
             self.ledger.log_cycle(**row)

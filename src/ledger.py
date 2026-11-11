@@ -28,29 +28,51 @@ class Ledger:
         self.db.commit()
 
     def log_cycle(self, **row: Any) -> None:
-        cols = ("ts", "mode", "ticker", "strike", "meeting_date", "model_p",
-                "best_bid", "best_ask", "mid", "action")
+        cols = (
+            "ts",
+            "mode",
+            "ticker",
+            "strike",
+            "meeting_date",
+            "model_p",
+            "best_bid",
+            "best_ask",
+            "mid",
+            "action",
+        )
         values = [row.get(c) for c in cols]
         self.db.execute(f"INSERT INTO cycles VALUES ({','.join('?' * len(cols))})", values)
         self.db.commit()
 
-    def add_fill(self, ticker: str, side: str, count: int, price_cents: int,
-                 fee_cents: int, model_p: float | None, ts: str | None = None) -> None:
-        self.db.execute("INSERT INTO fills VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (ts or utc_now(), ticker, side, count, price_cents, fee_cents, model_p))
+    def add_fill(
+        self,
+        ticker: str,
+        side: str,
+        count: int,
+        price_cents: int,
+        fee_cents: int,
+        model_p: float | None,
+        ts: str | None = None,
+    ) -> None:
+        self.db.execute(
+            "INSERT INTO fills VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ts or utc_now(), ticker, side, count, price_cents, fee_cents, model_p),
+        )
         self.db.commit()
 
     def set_settlement(self, ticker: str, result: str, settled_ts: str) -> None:
-        self.db.execute("INSERT OR REPLACE INTO settlements VALUES (?, ?, ?)",
-                        (ticker, result, settled_ts))
+        self.db.execute(
+            "INSERT OR REPLACE INTO settlements VALUES (?, ?, ?)", (ticker, result, settled_ts)
+        )
         self.db.commit()
 
     def settlements(self) -> dict[str, str]:
         return dict(self.db.execute("SELECT ticker, result FROM settlements").fetchall())
 
     def logged_tickers(self) -> list[str]:
-        rows = self.db.execute("SELECT DISTINCT ticker FROM cycles UNION "
-                               "SELECT DISTINCT ticker FROM fills").fetchall()
+        rows = self.db.execute(
+            "SELECT DISTINCT ticker FROM cycles UNION SELECT DISTINCT ticker FROM fills"
+        ).fetchall()
         return [r[0] for r in rows]
 
     def set_meta(self, key: str, value: str) -> None:
