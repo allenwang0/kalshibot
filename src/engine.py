@@ -14,7 +14,9 @@ class TradingBot:
         self.alpha = alpha or AlphaModel()
         self.risk = risk or RiskManager()
 
-    def run_cycle(self, ticker_list):
+    def run_cycle(self, markets=None):
+        if markets is None:
+            markets = self.client.get_markets(settings.SERIES_TICKER)
         cash = self.executor.get_balance()
         positions = self.executor.get_positions()
         total_exposure = sum(positions.values())
@@ -22,7 +24,8 @@ class TradingBot:
         print(f"Current Bankroll: ${bankroll:.2f} (cash ${cash:.2f})")
         if bankroll < 1: return
 
-        for ticker in ticker_list:
+        for market in markets:
+            ticker = market['ticker']
             self.executor.cancel_resting_orders(ticker)
             book = parse_orderbook(self.client.get_market_orderbook(ticker))
             if book is None or book.spread > settings.MAX_SPREAD_CENTS: continue
@@ -30,7 +33,10 @@ class TradingBot:
             best_ask_cents = book.best_yes_ask
             market_price = best_ask_cents / 100.0
 
-            fair_prob = self.alpha.calculate_fair_value(ticker)
+            fair_prob = self.alpha.calculate_fair_value(market)
+            if fair_prob is None:
+                print(f"[{ticker}] No model price, skipping")
+                continue
             target = self.risk.calculate_kelly_size(bankroll, fair_prob, market_price)
             held = positions.get(ticker, 0.0)
             # Buy only the gap to the target, within the overall exposure cap and cash.

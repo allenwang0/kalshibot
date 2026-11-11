@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     BASE_URL: str = Field("https://api.kalshi.com/trade-api/v2", validation_alias="KALSHI_API_URL")
     # PAPER never sends orders to Kalshi. LIVE must be set explicitly.
     TRADING_MODE: Literal["PAPER", "LIVE"] = "PAPER"
+    SERIES_TICKER: str = "KXFED"  # Kalshi series whose open markets the bot trades
     PAPER_BANKROLL: float = 1000.0
     PAPER_DB_PATH: str = "paper_trades.db"
 

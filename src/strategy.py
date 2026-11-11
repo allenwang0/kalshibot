@@ -16,28 +16,35 @@ class AlphaModel:
             self.cache = self.cme.get_probabilities()
             self.last_update = now
 
-    def parse_kalshi_ticker(self, ticker: str):
-        # Logic to map 'KX-FEDRATE-DEC24-5.25' -> '2024-12-18', 525
-        try:
-            if "DEC24" in ticker:
-                date_key = "2024-12-18"
-            elif "NOV24" in ticker:
-                date_key = "2024-11-07"
-            else:
-                return None, None
+    def parse_market(self, market: dict):
+        """Map a market from GET /markets to (FOMC meeting date, threshold in bps).
 
-            threshold_bps = float(ticker.split('-')[-1]) * 100
-            return date_key, threshold_bps
-        except:
+        Uses strike_type, floor_strike and close_time from the market object.
+        https://docs.kalshi.com/api-reference/market/get-markets
+        A market settles on the FOMC meeting held in its close month; there is at
+        most one meeting per month, and the meeting dates come from the CME data.
+        """
+        if market.get('strike_type') != 'greater':
             return None, None
+        try:
+            threshold_bps = float(market['floor_strike']) * 100
+            close = datetime.date.fromisoformat(market['close_time'][:10])
+        except (KeyError, TypeError, ValueError):
+            return None, None
+        month = close.isoformat()[:7]
+        for date_key in sorted(self.cache):
+            if date_key.startswith(month) and date_key <= close.isoformat():
+                return date_key, threshold_bps
+        return None, None
 
-    def calculate_fair_value(self, ticker: str) -> float:
+    def calculate_fair_value(self, market: dict):
+        """Model probability that the market settles YES, or None if unknown."""
         self._update_data()
-        target_date, threshold_bps = self.parse_kalshi_ticker(ticker)
+        target_date, threshold_bps = self.parse_market(market)
 
-        if not target_date or not threshold_bps: return 0.0
+        if target_date is None: return None
         cme_probs = self.cache.get(target_date)
-        if not cme_probs: return 0.0
+        if not cme_probs: return None
 
         # Sum probs where rate > threshold
         fair_prob = 0.0
