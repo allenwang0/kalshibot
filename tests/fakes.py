@@ -33,5 +33,8 @@ class FakeAlpha:
     def __init__(self, prob=0.90):
         self.prob = prob
 
+    def refresh(self, markets):
+        pass
+
     def calculate_fair_value(self, market):
         return self.prob

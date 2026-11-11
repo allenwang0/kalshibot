@@ -17,6 +17,7 @@ class TradingBot:
     def run_cycle(self, markets=None):
         if markets is None:
             markets = self.client.get_markets(settings.SERIES_TICKER)
+        self.alpha.refresh(markets)
         # Cancel first, then read the account. A resting order that fills before
         # its cancel lands must already be in the positions used for sizing.
         for market in markets:

@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     # PAPER never sends orders to Kalshi. LIVE must be set explicitly.
     TRADING_MODE: Literal["PAPER", "LIVE"] = "PAPER"
     SERIES_TICKER: str = "KXFED"  # Kalshi series whose open markets the bot trades
+    # CSV of 30-Day Fed Funds futures settlement prices (columns month, price),
+    # supplied by the user. See data/fed_funds_futures.example.csv.
+    FUTURES_PRICES_PATH: str = "data/fed_funds_futures.csv"
+    # Upper bound of the current FOMC target range in bps, e.g. 400 for 3.75-4.00%.
+    CURRENT_TARGET_UPPER_BPS: Optional[int] = None
     PAPER_BANKROLL: float = 1000.0
     PAPER_DB_PATH: str = "paper_trades.db"
 
