@@ -14,6 +14,9 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 MAX_RETRIES = 3
 BACKOFF_BASE = 0.5  # seconds
 BACKOFF_CAP = 8.0  # seconds
+# Without a timeout a stalled connection blocks the loop forever and the
+# Timeout retry below never fires.
+REQUEST_TIMEOUT = 10.0  # seconds
 
 
 class KalshiAPIError(Exception):
@@ -78,7 +81,8 @@ class KalshiClient:
 
             last_try = attempt == MAX_RETRIES
             try:
-                response = self.session.request(method, url, headers=headers, params=params, json=data)
+                response = self.session.request(method, url, headers=headers, params=params, json=data,
+                                                timeout=REQUEST_TIMEOUT)
             except (requests.ConnectionError, requests.Timeout):
                 if last_try:
                     raise

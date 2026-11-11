@@ -22,9 +22,12 @@ class _ScriptedSession:
         self.responses = list(responses)
         self.calls = []
 
-    def request(self, method, url, headers=None, params=None, json=None):
-        self.calls.append({"method": method, "url": url, "json": json})
-        return self.responses.pop(0)
+    def request(self, method, url, headers=None, params=None, json=None, timeout=None):
+        self.calls.append({"method": method, "url": url, "json": json, "timeout": timeout})
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def _client(*responses):
@@ -108,3 +111,12 @@ def test_portfolio_and_market_calls_parse_documented_shapes():
     assert c.get_markets("KXFED") == [{"ticker": "KXFED-X"}]
     methods = [(call["method"], call["url"].split("/trade-api/v2")[1]) for call in c.session.calls]
     assert ("DELETE", "/portfolio/events/orders/o1") in methods
+
+
+def test_every_request_has_a_timeout_so_a_stalled_socket_is_retried():
+    # requests waits forever by default; a hung Kalshi connection froze the bot.
+    import requests
+    c = _client(requests.Timeout("stalled"), _Resp(200, {"balance": 1234}))
+    assert c.get_balance() == 12.34
+    assert all(call["timeout"] for call in c.session.calls)
+    assert len(c.session.calls) == 2

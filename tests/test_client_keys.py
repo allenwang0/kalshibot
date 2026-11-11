@@ -20,7 +20,7 @@ class _RecordingSession:
     def __init__(self):
         self.calls = []
 
-    def request(self, method, url, headers=None, params=None, json=None):
+    def request(self, method, url, headers=None, params=None, json=None, timeout=None):
         self.calls.append({"method": method, "url": url, "headers": headers, "json": json})
         return _FakeResponse()
 
