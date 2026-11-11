@@ -1,4 +1,5 @@
 import datetime
+from zoneinfo import ZoneInfo
 from src.data.cme import CMEFedWatch
 
 
@@ -30,12 +31,14 @@ class AlphaModel:
         https://docs.kalshi.com/api-reference/market/get-markets
         A market settles on the FOMC meeting held in its close month; there is at
         most one meeting per month, and the meeting dates come from the CME data.
+        close_time is UTC; FOMC dates are Eastern, so compare in Eastern time.
         """
         if market.get('strike_type') != 'greater':
             return None, None
         try:
             threshold_bps = float(market['floor_strike']) * 100
-            close = datetime.date.fromisoformat(market['close_time'][:10])
+            close = (datetime.datetime.fromisoformat(market['close_time'])
+                     .astimezone(ZoneInfo('America/New_York')).date())
         except (KeyError, TypeError, ValueError):
             return None, None
         month = close.isoformat()[:7]
