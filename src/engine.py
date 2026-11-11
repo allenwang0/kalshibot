@@ -17,6 +17,10 @@ class TradingBot:
     def run_cycle(self, markets=None):
         if markets is None:
             markets = self.client.get_markets(settings.SERIES_TICKER)
+        # Cancel first, then read the account. A resting order that fills before
+        # its cancel lands must already be in the positions used for sizing.
+        for market in markets:
+            self.executor.cancel_resting_orders(market['ticker'])
         cash = self.executor.get_balance()
         positions = self.executor.get_positions()
         total_exposure = sum(positions.values())
@@ -26,7 +30,6 @@ class TradingBot:
 
         for market in markets:
             ticker = market['ticker']
-            self.executor.cancel_resting_orders(ticker)
             book = parse_orderbook(self.client.get_market_orderbook(ticker))
             if book is None or book.spread > settings.MAX_SPREAD_CENTS: continue
 
