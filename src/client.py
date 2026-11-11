@@ -163,6 +163,12 @@ class KalshiClient:
             if not cursor:
                 return markets
 
+    def get_market(self, ticker: str) -> dict[str, Any]:
+        """One market; after settlement it carries result ("yes"/"no") and settlement_ts.
+        https://docs.kalshi.com/api-reference/market/get-market"""
+        market: dict[str, Any] = self.request("GET", f"/markets/{ticker}")["market"]
+        return market
+
     def get_balance(self) -> float:
         # balance is in cents. https://docs.kalshi.com/api-reference/portfolio/get-balance
         data = self.request("GET", "/portfolio/balance")

@@ -96,3 +96,21 @@ def test_ed25519_key_signs_the_message_directly():
     key.public_key().verify(base64.b64decode(h["KALSHI-ACCESS-SIGNATURE"]), message)
     with pytest.raises(InvalidSignature):
         key.public_key().verify(base64.b64decode(h["KALSHI-ACCESS-SIGNATURE"]), message + b"x")
+
+
+def test_get_market_returns_the_market_object():
+    c = _client(
+        _Resp(
+            200,
+            {
+                "market": {
+                    "ticker": "KXFED-26OCT-T5.25",
+                    "status": "finalized",
+                    "result": "no",
+                    "settlement_ts": "2026-10-28T18:17:54Z",
+                }
+            },
+        )
+    )
+    assert c.get_market("KXFED-26OCT-T5.25")["result"] == "no"
+    assert c.session.calls[0]["url"].endswith("/markets/KXFED-26OCT-T5.25")
