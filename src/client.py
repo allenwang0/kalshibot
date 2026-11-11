@@ -12,9 +12,11 @@ class KalshiClient:
         self.session = requests.Session()
         self.base_url = settings.BASE_URL
         self.key_id = settings.API_KEY_ID
-        self.private_key = self._load_private_key()
+        self.private_key = None
 
     def _load_private_key(self):
+        if not settings.PRIVATE_KEY_PATH:
+            raise RuntimeError("KALSHI_PRIVATE_KEY_PATH is not set; it is needed for authenticated requests")
         try:
             with open(settings.PRIVATE_KEY_PATH, "rb") as key_file:
                 return serialization.load_pem_private_key(
@@ -24,6 +26,8 @@ class KalshiClient:
             raise FileNotFoundError(f"Private key not found at {settings.PRIVATE_KEY_PATH}")
 
     def _sign_request(self, method: str, path: str, timestamp: str) -> str:
+        if self.private_key is None:
+            self.private_key = self._load_private_key()
         payload = f"{timestamp}{method}{path}".encode('utf-8')
         signature = self.private_key.sign(
             payload,
@@ -35,16 +39,21 @@ class KalshiClient:
         )
         return base64.b64encode(signature).decode('utf-8')
 
-    def request(self, method: str, endpoint: str, params=None, data=None):
-        timestamp = str(int(time.time() * 1000))
-        path_for_sign = f'/trade-api/v2{endpoint}'
+    def _needs_auth(self, endpoint: str) -> bool:
+        # Portfolio endpoints always need a signature. Market data is signed only
+        # when keys are configured, so PAPER mode runs without any keys.
+        return endpoint.startswith('/portfolio') or bool(self.key_id and settings.PRIVATE_KEY_PATH)
 
-        headers = {
-            'KALSHI-ACCESS-KEY': self.key_id,
-            'KALSHI-ACCESS-TIMESTAMP': timestamp,
-            'KALSHI-ACCESS-SIGNATURE': self._sign_request(method, path_for_sign, timestamp),
-            'Content-Type': 'application/json'
-        }
+    def request(self, method: str, endpoint: str, params=None, data=None):
+        headers = {'Content-Type': 'application/json'}
+        if self._needs_auth(endpoint):
+            timestamp = str(int(time.time() * 1000))
+            path_for_sign = f'/trade-api/v2{endpoint}'
+            headers.update({
+                'KALSHI-ACCESS-KEY': self.key_id,
+                'KALSHI-ACCESS-TIMESTAMP': timestamp,
+                'KALSHI-ACCESS-SIGNATURE': self._sign_request(method, path_for_sign, timestamp),
+            })
 
         url = f"{self.base_url}{endpoint}"
         response = self.session.request(method, url, headers=headers, params=params, json=data)
