@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     # Upper bound of the current FOMC target range in bps, e.g. 400 for 3.75-4.00%.
     CURRENT_TARGET_UPPER_BPS: Optional[int] = None
     PAPER_BANKROLL: float = 1000.0
-    PAPER_DB_PATH: str = "paper_trades.db"
+    # SQLite log of cycles, paper fills and settlements (scripts/evaluate.py reads it).
+    DB_PATH: str = "kalshibot.db"
 
     # Risk Settings
     KELLY_FRACTION: float = 0.20
@@ -31,6 +32,18 @@ class Settings(BaseSettings):
     MAX_POSITION_SIZE: float = 100.0  # max dollars at risk per market
     MAX_SPREAD_CENTS: int = 10  # skip markets with a wider YES bid/ask spread
     MAX_TOTAL_EXPOSURE: float = 300.0  # max dollars at risk across all markets
+    # Below $1 the one-cent fee rounding is a large share of the order.
+    MIN_ORDER_DOLLARS: float = 1.0
+    MIN_BANKROLL_DOLLARS: float = 1.0
+
+    # Loop and request pacing
+    # Fed-rate books move on data releases, not by the second; one cycle a
+    # minute keeps request use far under the rate limit.
+    LOOP_SECONDS: float = 60.0
+    # Basic tier read budget is 200 tokens/s and most requests cost 10 tokens.
+    # https://docs.kalshi.com/getting_started/rate_limits
+    RATE_LIMIT_PER_SEC: float = 20.0
+    MAX_WORKERS: int = 8  # concurrent orderbook fetches
 
     @model_validator(mode="after")
     def _live_needs_keys(self):
