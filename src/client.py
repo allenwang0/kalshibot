@@ -72,6 +72,31 @@ class KalshiClient:
             return data.get('balance', 0) / 100.0
         return 0.0
 
+    def get_positions(self) -> dict:
+        """Dollars at risk (cost basis) per market ticker.
+        https://docs.kalshi.com/api-reference/portfolio/get-positions"""
+        positions, cursor = {}, None
+        while True:
+            params = {'count_filter': 'position', 'limit': 1000}
+            if cursor:
+                params['cursor'] = cursor
+            data = self.request('GET', '/portfolio/positions', params=params)
+            for p in data.get('market_positions', []):
+                positions[p['ticker']] = float(p['market_exposure_dollars'])
+            cursor = data.get('cursor')
+            if not cursor:
+                return positions
+
+    def get_resting_orders(self, ticker: str) -> list:
+        # https://docs.kalshi.com/api-reference/orders/get-orders
+        data = self.request('GET', '/portfolio/orders', params={'ticker': ticker, 'status': 'resting'})
+        return data.get('orders', [])
+
+    def cancel_order(self, order_id: str, ticker: str):
+        # https://docs.kalshi.com/api-reference/orders/cancel-order-v2
+        return self.request('DELETE', f'/portfolio/events/orders/{order_id}',
+                            params={'market_ticker': ticker})
+
     def place_order(self, ticker: str, side: str, count: int, price: int):
         payload = {
             "action": "buy", "type": "limit", "side": side,
