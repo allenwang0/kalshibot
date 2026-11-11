@@ -47,3 +47,52 @@ def test_wide_spread_is_skipped(monkeypatch):
 def _LiveFor(client):
     from src.executor import LiveExecutor
     return LiveExecutor(client)
+
+
+import pytest  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
+
+@pytest.mark.parametrize("value", ["paper", "Live", "1", ""])
+def test_ambiguous_trading_mode_is_rejected_not_guessed(monkeypatch, tmp_path, value):
+    # A typo must stop the bot, not fall through to either mode.
+    from src.config import Settings
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TRADING_MODE", value)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_paper_cycle_sends_only_get_requests_over_http(monkeypatch, tmp_path):
+    # End to end through the real KalshiClient: in PAPER mode the only HTTP
+    # traffic is market data. No POST or DELETE may leave the process.
+    from src.client import KalshiClient
+
+    class Resp:
+        status_code = 200
+        text = "x"
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    class Session:
+        methods = []
+
+        def request(self, method, url, **kwargs):
+            self.methods.append(method)
+            if url.endswith("/orderbook"):
+                return Resp({"orderbook": {"yes": [[45, 100]], "no": [[52, 100]]}})
+            return Resp({"markets": [{"ticker": "KXFED-TEST-T4.00"}]})
+
+    client = KalshiClient()
+    client.session = Session()
+    monkeypatch.setattr(engine, "KalshiClient", lambda: client)
+    monkeypatch.setattr(engine, "AlphaModel", FakeAlpha)
+    monkeypatch.chdir(tmp_path)
+    bot = engine.TradingBot()
+    bot.run_cycle()
+    assert len(bot.executor.fills()) == 1
+    assert set(Session.methods) == {"GET"}
