@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     # Risk Settings
     KELLY_FRACTION: float = 0.20
+    # Weight on the model's edge over the market price, in [0, 1]; 0 never trades.
+    SHRINKAGE: float = Field(0.5, ge=0.0, le=1.0)
+    FEE_RATE: float = 0.07  # Kalshi taker fee coefficient, see src/risk.py
     MAX_POSITION_SIZE: float = 100.0  # max dollars at risk per market
     MAX_SPREAD_CENTS: int = 10  # skip markets with a wider YES bid/ask spread
     MAX_TOTAL_EXPOSURE: float = 300.0  # max dollars at risk across all markets

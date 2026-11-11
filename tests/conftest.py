@@ -8,7 +8,7 @@ for _name in list(os.environ):
     if _name.startswith("KALSHI_") or _name in {
         "TRADING_MODE", "KELLY_FRACTION", "MAX_POSITION_SIZE", "MAX_TOTAL_EXPOSURE",
         "MAX_SPREAD_CENTS", "SERIES_TICKER", "PAPER_BANKROLL", "PAPER_DB_PATH", "FUTURES_PRICES_PATH",
-        "CURRENT_TARGET_UPPER_BPS",
+        "CURRENT_TARGET_UPPER_BPS", "SHRINKAGE", "FEE_RATE",
     }:
         del os.environ[_name]
 _cwd = os.getcwd()
