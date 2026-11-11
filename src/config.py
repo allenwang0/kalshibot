@@ -9,7 +9,9 @@ class Settings(BaseSettings):
 
     API_KEY_ID: Optional[str] = Field(None, validation_alias="KALSHI_API_KEY_ID")
     PRIVATE_KEY_PATH: Optional[str] = Field(None, validation_alias="KALSHI_PRIVATE_KEY_PATH")
-    BASE_URL: str = Field("https://api.kalshi.com/trade-api/v2", validation_alias="KALSHI_API_URL")
+    # Production. Demo is https://external-api.demo.kalshi.co/trade-api/v2 and
+    # needs demo keys. https://docs.kalshi.com/getting_started/api_environments
+    BASE_URL: str = Field("https://external-api.kalshi.com/trade-api/v2", validation_alias="KALSHI_API_URL")
     # PAPER never sends orders to Kalshi. LIVE must be set explicitly.
     TRADING_MODE: Literal["PAPER", "LIVE"] = "PAPER"
     SERIES_TICKER: str = "KXFED"  # Kalshi series whose open markets the bot trades
