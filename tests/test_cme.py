@@ -20,3 +20,17 @@ def test_single_digit_day_gives_iso_key(monkeypatch):
     monkeypatch.setattr(cme.requests, "get", lambda *a, **k: _Resp(MEETINGS))
     probs = cme.CMEFedWatch().get_probabilities()
     assert list(probs) == ["2024-11-07"]
+
+
+def test_cme_request_does_not_spoof_a_browser(monkeypatch):
+    # Faking a random browser User-Agent, Referer and Origin to get past CME's
+    # site is a terms-of-service problem, so requests identify as themselves.
+    seen = {}
+
+    def fake_get(url, headers=None, timeout=None):
+        seen.update(headers or {})
+        return _Resp(MEETINGS)
+
+    monkeypatch.setattr(cme.requests, "get", fake_get)
+    cme.CMEFedWatch().get_probabilities()
+    assert not {"User-Agent", "Referer", "Origin"} & set(seen)
