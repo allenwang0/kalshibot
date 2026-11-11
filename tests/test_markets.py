@@ -66,3 +66,16 @@ def test_cycle_discovers_markets_by_series(monkeypatch):
     bot.run_cycle()
     assert client.series == engine.settings.SERIES_TICKER
     assert seen == ["KXFED-25DEC-T3.75"]
+
+
+def test_close_time_is_read_in_eastern_time_across_a_month_boundary():
+    # 01:00Z on Feb 1 is still Jan 31 in New York. Reading the UTC date put the
+    # Jan 31 meeting in February and the market got no price.
+    alpha = _alpha()
+    alpha.cache = {"2024-01-31": CME["2025-12-10"]}
+    market = {**MARKETS[0], "close_time": "2024-02-01T01:00:00Z"}
+    assert alpha.parse_market(market) == ("2024-01-31", 375.0)
+    # Same instant across a year boundary.
+    alpha.cache = {"2025-12-31": CME["2025-12-10"]}
+    market = {**MARKETS[0], "close_time": "2026-01-01T03:00:00Z"}
+    assert alpha.parse_market(market) == ("2025-12-31", 375.0)
