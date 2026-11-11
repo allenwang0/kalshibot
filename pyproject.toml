@@ -1,0 +1,47 @@
+[project]
+name = "kalshibot"
+version = "0.2.0"
+description = "Prices Kalshi Fed-rate contracts from fed funds futures, sizes with fee-aware Kelly, and scores the model against the market. Paper mode by default."
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography==50.0.2",
+    "plotly==7.1.0",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "python-dotenv==1.2.4",
+    "requests==2.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis==6.170.12",
+    "jsonschema==4.26.0",
+    "mypy==2.4.0",
+    "playwright==1.64.1",
+    "pytest==9.2.0",
+    "responses==0.26.3",
+    "ruff==0.17.3",
+    "types-requests==2.33.0.20261006",
+]
+
+[tool.uv]
+package = false
+# Resolve only releases published before this date, so a fresh release cannot slip in.
+exclude-newer = "2026-10-28T07:00:00Z"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
