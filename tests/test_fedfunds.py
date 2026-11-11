@@ -5,6 +5,7 @@ It is not CME's published example: the CME methodology page could not be
 retrieved when this was written, so the plan's "reproduce CME's example within
 0.5 pp" check is still open.
 """
+
 import datetime
 import math
 
@@ -66,10 +67,12 @@ def test_load_prices_reads_month_and_price(tmp_path):
 months = st.lists(st.integers(min_value=0, max_value=23), min_size=1, max_size=8, unique=True)
 
 
-@given(meeting_month_offsets=months,
-       rates=st.lists(st.floats(min_value=0.0, max_value=8.0), min_size=26, max_size=26),
-       days=st.lists(st.integers(min_value=1, max_value=28), min_size=26, max_size=26),
-       upper=st.sampled_from([25, 100, 375, 525]))
+@given(
+    meeting_month_offsets=months,
+    rates=st.lists(st.floats(min_value=0.0, max_value=8.0), min_size=26, max_size=26),
+    days=st.lists(st.integers(min_value=1, max_value=28), min_size=26, max_size=26),
+    upper=st.sampled_from([25, 100, 375, 525]),
+)
 def test_each_meeting_is_a_probability_distribution(meeting_month_offsets, rates, days, upper):
     meetings = []
     for off in sorted(meeting_month_offsets):

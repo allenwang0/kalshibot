@@ -36,6 +36,7 @@ def test_market_data_request_is_unsigned_without_keys():
 def test_live_mode_without_keys_fails_at_startup():
     import pytest
     from pydantic import ValidationError
+
     from src.config import Settings
 
     with pytest.raises(ValidationError, match="TRADING_MODE=LIVE requires"):

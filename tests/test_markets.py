@@ -10,16 +10,28 @@ from tests.fakes import FakeClient
 # Fabricated markets in the shape of GET /markets (ticker, strike_type,
 # floor_strike, close_time). https://docs.kalshi.com/api-reference/market/get-markets
 MARKETS = [
-    {"ticker": "KXFED-26DEC-T3.50", "strike_type": "greater", "floor_strike": 3.5,
-     "close_time": "2026-12-09T18:55:00Z"},
-    {"ticker": "KXFED-27JAN-T3.25", "strike_type": "greater", "floor_strike": 3.25,
-     "close_time": "2027-01-27T18:55:00Z"},
-    {"ticker": "KXFED-27MAR-T3.25", "strike_type": "greater", "floor_strike": 3.25,
-     "close_time": "2027-03-17T17:55:00Z"},  # no futures prices that far out
+    {
+        "ticker": "KXFED-26DEC-T3.50",
+        "strike_type": "greater",
+        "floor_strike": 3.5,
+        "close_time": "2026-12-09T18:55:00Z",
+    },
+    {
+        "ticker": "KXFED-27JAN-T3.25",
+        "strike_type": "greater",
+        "floor_strike": 3.25,
+        "close_time": "2027-01-27T18:55:00Z",
+    },
+    {
+        "ticker": "KXFED-27MAR-T3.25",
+        "strike_type": "greater",
+        "floor_strike": 3.25,
+        "close_time": "2027-03-17T17:55:00Z",
+    },  # no futures prices that far out
 ]
 # Same fabricated prices as tests/test_fedfunds.py: Dec -10 bp, Jan -15 bp.
-PRICES = ("month,price\n2026-11,96.36\n2026-12,{dec}\n2027-01,96.55\n2027-02,96.61\n"
-          .format(dec=100 - (9 * 3.64 + 22 * 3.54) / 31))
+DEC_PRICE = 100 - (9 * 3.64 + 22 * 3.54) / 31
+PRICES = f"month,price\n2026-11,96.36\n2026-12,{DEC_PRICE}\n2027-01,96.55\n2027-02,96.61\n"
 
 
 @pytest.fixture
@@ -41,10 +53,12 @@ def test_markets_map_to_the_fomc_meeting_they_settle_on():
 def test_close_time_is_read_in_eastern_time_across_month_and_year_boundaries():
     # 01:00Z on Feb 1 is still Jan 31 in New York; reading the UTC date put a
     # Jan 31 meeting in February.
-    assert meeting_date({**MARKETS[0], "close_time": "2024-02-01T01:00:00Z"}) == \
-        datetime.date(2024, 1, 31)
-    assert meeting_date({**MARKETS[0], "close_time": "2026-01-01T03:00:00Z"}) == \
-        datetime.date(2025, 12, 31)
+    assert meeting_date({**MARKETS[0], "close_time": "2024-02-01T01:00:00Z"}) == datetime.date(
+        2024, 1, 31
+    )
+    assert meeting_date({**MARKETS[0], "close_time": "2026-01-01T03:00:00Z"}) == datetime.date(
+        2025, 12, 31
+    )
 
 
 def test_fair_value_is_p_upper_bound_above_strike(alpha):
@@ -84,8 +98,9 @@ def test_cycle_discovers_markets_by_series():
             seen.append(market["ticker"])
             return None
 
-    bot = engine.TradingBot(client=client, executor=PaperExecutor(":memory:"),
-                            alpha=RecordingAlpha())
+    bot = engine.TradingBot(
+        client=client, executor=PaperExecutor(":memory:"), alpha=RecordingAlpha()
+    )
     bot.run_cycle()
     assert client.series == engine.settings.SERIES_TICKER
     assert seen == [["KXFED-26DEC-T3.50"], "KXFED-26DEC-T3.50"]

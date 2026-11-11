@@ -27,8 +27,9 @@ def test_no_edge_and_negative_edge_size_to_zero():
     assert kelly(10_000, 0.30, 0.50) == 0.0
 
 
-@pytest.mark.parametrize("p,q", [(1.0, 0.0), (1.0, 1.0), (0.9, 1.0), (float("nan"), 0.5),
-                                 (1.2, 0.5), (0.0, 0.01)])
+@pytest.mark.parametrize(
+    "p,q", [(1.0, 0.0), (1.0, 1.0), (0.9, 1.0), (float("nan"), 0.5), (1.2, 0.5), (0.0, 0.01)]
+)
 def test_degenerate_inputs_size_to_zero_or_stay_capped(p, q):
     size = kelly(10_000, p, q)
     assert 0.0 <= size <= settings.MAX_POSITION_SIZE

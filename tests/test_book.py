@@ -32,8 +32,12 @@ def test_one_level_per_side():
 
 def test_fixed_point_dollar_shape():
     # Current docs shape: orderbook_fp with dollar-string prices and fp counts.
-    resp = {"orderbook_fp": {"yes_dollars": [["0.4000", "10.00"], ["0.4500", "5.00"]],
-                             "no_dollars": [["0.5000", "8.00"], ["0.5200", "3.00"]]}}
+    resp = {
+        "orderbook_fp": {
+            "yes_dollars": [["0.4000", "10.00"], ["0.4500", "5.00"]],
+            "no_dollars": [["0.5000", "8.00"], ["0.5200", "3.00"]],
+        }
+    }
     book = parse_orderbook(resp)
     assert (book.best_yes_bid, book.best_yes_ask, book.bid_size, book.ask_size) == (45, 48, 5, 3)
 

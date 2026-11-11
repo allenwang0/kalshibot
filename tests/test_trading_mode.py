@@ -31,7 +31,7 @@ def test_order_is_posted_at_the_yes_ask_not_the_lowest_bid():
     client = FakeClient()
     bot = engine.TradingBot(client=client, executor=_LiveFor(client), alpha=FakeAlpha())
     bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
-    (_, side, count, price), = client.live_orders
+    ((_, side, count, price),) = client.live_orders
     assert (side, price) == ("yes", 48)
     assert count <= 3  # never more than the size resting at the ask
 
@@ -46,6 +46,7 @@ def test_wide_spread_is_skipped(monkeypatch):
 
 def _LiveFor(client):
     from src.executor import LiveExecutor
+
     return LiveExecutor(client)
 
 
@@ -57,6 +58,7 @@ from pydantic import ValidationError  # noqa: E402
 def test_ambiguous_trading_mode_is_rejected_not_guessed(monkeypatch, tmp_path, value):
     # A typo must stop the bot, not fall through to either mode.
     from src.config import Settings
+
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TRADING_MODE", value)
     with pytest.raises(ValidationError):
