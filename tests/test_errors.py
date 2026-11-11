@@ -89,3 +89,22 @@ def test_failed_cme_fetch_is_not_cached():
     assert alpha.last_update == 0
     alpha._update_data()
     assert FlakyCME.calls == 2 and "2025-12-10" in alpha.cache
+
+
+def test_portfolio_and_market_calls_parse_documented_shapes():
+    # Fabricated values in the documented response shapes; cursors page through.
+    c = _client(
+        _Resp(200, {"market_positions": [{"ticker": "A", "position_fp": "10.00",
+                                          "market_exposure_dollars": "4.800000"}], "cursor": "n"}),
+        _Resp(200, {"market_positions": [{"ticker": "B", "position_fp": "2.00",
+                                          "market_exposure_dollars": "1.000000"}], "cursor": ""}),
+        _Resp(200, {"orders": [{"order_id": "o1", "ticker": "A"}]}),
+        _Resp(200, {}),
+        _Resp(200, {"markets": [{"ticker": "KXFED-X"}], "cursor": ""}),
+    )
+    assert c.get_positions() == {"A": 4.8, "B": 1.0}
+    assert c.get_resting_orders("A") == [{"order_id": "o1", "ticker": "A"}]
+    c.cancel_order("o1", "A")
+    assert c.get_markets("KXFED") == [{"ticker": "KXFED-X"}]
+    methods = [(call["method"], call["url"].split("/trade-api/v2")[1]) for call in c.session.calls]
+    assert ("DELETE", "/portfolio/events/orders/o1") in methods
