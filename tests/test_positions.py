@@ -75,3 +75,29 @@ def test_exposure_caps_hold_over_random_books_and_bankrolls(tmp_path):
         assert sum(positions.values()) <= settings.MAX_TOTAL_EXPOSURE + 1e-9, trial
         assert all(v <= settings.MAX_POSITION_SIZE + 1e-9 for v in positions.values()), trial
         assert ex.get_balance() >= -1e-9, trial
+
+
+def test_order_that_fills_while_being_cancelled_counts_toward_the_cap():
+    # Race: a resting order fills between the position read and its cancel.
+    # If positions are read before cancelling, the fill is invisible and the bot
+    # buys the full gap again, ending above MAX_POSITION_SIZE.
+    from src.executor import LiveExecutor
+
+    class RacingClient(FakeClient):
+        def __init__(self):
+            super().__init__(book=DEEP_BOOK, balance=10000.0)
+            self.held = 0.0
+
+        def get_positions(self):
+            return {"KXFED-TEST-T4.00": self.held}
+
+        def get_resting_orders(self, ticker):
+            return [{"order_id": "o1"}] if self.held == 0.0 else []
+
+        def cancel_order(self, order_id, ticker):
+            self.held = settings.MAX_POSITION_SIZE  # filled just before the cancel
+
+    client = RacingClient()
+    bot = engine.TradingBot(client=client, executor=LiveExecutor(client), alpha=FakeAlpha())
+    bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
+    assert client.live_orders == []
