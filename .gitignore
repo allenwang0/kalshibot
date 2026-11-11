@@ -13,3 +13,11 @@ keys/
 
 # OS Files
 .DS_Store
+
+# Local tooling
+.idea/
+.venv/
+.pytest_cache/
+
+# Paper trading ledger
+*.db
