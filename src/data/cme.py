@@ -1,20 +1,13 @@
 import datetime
 import requests
-from fake_useragent import UserAgent
 
 
 class CMEFedWatch:
     def __init__(self):
-        self.ua = UserAgent()
         self.url = "https://www.cmegroup.com/CmeWS/mvc/Tool/FedWatch/MeetingDates.json"
 
     def get_probabilities(self):
-        headers = {
-            'User-Agent': self.ua.random,
-            'Accept': 'application/json',
-            'Referer': 'https://www.cmegroup.com',
-            'Origin': 'https://www.cmegroup.com'
-        }
+        headers = {'Accept': 'application/json'}
         try:
             response = requests.get(self.url, headers=headers, timeout=10)
             data = response.json()
