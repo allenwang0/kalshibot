@@ -2,9 +2,12 @@ import time
 import base64
 import random
 import uuid
+from urllib.parse import urlparse
+
 import requests
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 from src.config import settings
 
@@ -46,14 +49,20 @@ class KalshiClient:
             raise FileNotFoundError(f"Private key not found at {settings.PRIVATE_KEY_PATH}")
 
     def _sign_request(self, method: str, path: str, timestamp: str) -> str:
+        # Message is timestamp + method + path without the query string. RSA keys
+        # sign with PSS, SHA-256 and a salt equal to the digest length; Ed25519
+        # keys sign the message directly.
+        # https://docs.kalshi.com/getting_started/api_keys
         if self.private_key is None:
             self.private_key = self._load_private_key()
         payload = f"{timestamp}{method}{path}".encode('utf-8')
+        if isinstance(self.private_key, Ed25519PrivateKey):
+            return base64.b64encode(self.private_key.sign(payload)).decode('utf-8')
         signature = self.private_key.sign(
             payload,
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
+                salt_length=padding.PSS.DIGEST_LENGTH
             ),
             hashes.SHA256()
         )
@@ -72,7 +81,7 @@ class KalshiClient:
             headers = {'Content-Type': 'application/json'}
             if self._needs_auth(endpoint):
                 timestamp = str(int(time.time() * 1000))
-                path_for_sign = f'/trade-api/v2{endpoint}'
+                path_for_sign = urlparse(url).path
                 headers.update({
                     'KALSHI-ACCESS-KEY': self.key_id,
                     'KALSHI-ACCESS-TIMESTAMP': timestamp,
@@ -140,13 +149,24 @@ class KalshiClient:
                             params={'market_ticker': ticker})
 
     def place_order(self, ticker: str, side: str, count: int, price: int):
-        # One client_order_id per order, reused by request() retries, so a retried
-        # POST cannot create a second order. Send only the price for this side.
+        """Limit buy of `count` YES contracts at `price` cents.
+
+        Create Order V2 quotes the YES leg only: side "bid" buys YES. Count and
+        price are fixed-point strings, price in dollars. The legacy
+        POST /portfolio/orders is being deprecated.
+        https://docs.kalshi.com/api-reference/orders/create-order-v2
+        One client_order_id per order, reused by request() retries, so a retried
+        POST cannot create a second order.
+        """
+        if side != "yes" or not 1 <= price <= 99 or count < 1:
+            raise ValueError(f"refusing order: side={side} count={count} price={price}")
         payload = {
-            "action": "buy", "type": "limit", "side": side,
-            "ticker": ticker, "count": count,
-            f"{side}_price": price,
-            "buy_max_cost": count * price,
+            "ticker": ticker,
             "client_order_id": str(uuid.uuid4()),
+            "side": "bid",
+            "count": f"{count}.00",
+            "price": f"{price / 100:.4f}",
+            "time_in_force": "good_till_canceled",
+            "self_trade_prevention_type": "taker_at_cross",
         }
-        return self.request('POST', '/portfolio/orders', data=payload)
+        return self.request('POST', '/portfolio/events/orders', data=payload)
