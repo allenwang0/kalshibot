@@ -4,7 +4,6 @@ import pytest
 
 import src.client as client_mod
 from src.client import KalshiClient
-from src.strategy import AlphaModel
 
 
 class _Resp:
@@ -75,23 +74,6 @@ def test_retried_order_reuses_one_client_order_id_and_sends_one_price():
     c.place_order("KXFED-TEST", "yes", 3, 48)
     first, second = (call["json"] for call in c.session.calls)
     assert first["client_order_id"] and first["client_order_id"] == second["client_order_id"]
-
-
-def test_failed_cme_fetch_is_not_cached():
-    # A CME outage used to blank the model for the full cache window.
-    class FlakyCME:
-        calls = 0
-
-        def get_probabilities(self):
-            FlakyCME.calls += 1
-            return {} if FlakyCME.calls == 1 else {"2025-12-10": []}
-
-    alpha = AlphaModel()
-    alpha.cme = FlakyCME()
-    alpha._update_data()
-    assert alpha.last_update == 0
-    alpha._update_data()
-    assert FlakyCME.calls == 2 and "2025-12-10" in alpha.cache
 
 
 def test_portfolio_and_market_calls_parse_documented_shapes():
