@@ -1,3 +1,4 @@
+import datetime
 import requests
 from fake_useragent import UserAgent
 
@@ -20,7 +21,7 @@ class CMEFedWatch:
             meetings = {}
 
             for meeting in data:
-                date_str = f"{meeting['year']}-{meeting['month']}-{meeting['day']}"
+                date_str = datetime.date(int(meeting['year']), int(meeting['month']), int(meeting['day'])).isoformat()
                 prob_list = []
                 for bucket in meeting.get('probabilityList', []):
                     prob_list.append({
