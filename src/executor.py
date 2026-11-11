@@ -8,6 +8,10 @@ from src.config import settings
 class Executor(Protocol):
     def get_balance(self) -> float: ...
 
+    def get_positions(self) -> dict: ...
+
+    def cancel_resting_orders(self, ticker: str) -> None: ...
+
     def place_order(self, ticker: str, side: str, count: int, price: int): ...
 
 
@@ -30,6 +34,13 @@ class PaperExecutor:
         spent = self.db.execute("SELECT COALESCE(SUM(count * price_cents), 0) FROM fills").fetchone()[0]
         return self.bankroll - spent / 100.0
 
+    def get_positions(self) -> dict:
+        rows = self.db.execute("SELECT ticker, SUM(count * price_cents) FROM fills GROUP BY ticker")
+        return {ticker: cents / 100.0 for ticker, cents in rows}
+
+    def cancel_resting_orders(self, ticker: str) -> None:
+        pass  # paper orders fill immediately, so nothing rests
+
     def place_order(self, ticker: str, side: str, count: int, price: int):
         self.db.execute(
             "INSERT INTO fills VALUES (?, ?, ?, ?, ?)", (time.time(), ticker, side, count, price)
@@ -45,6 +56,13 @@ class LiveExecutor:
 
     def get_balance(self) -> float:
         return self.client.get_balance()
+
+    def get_positions(self) -> dict:
+        return self.client.get_positions()
+
+    def cancel_resting_orders(self, ticker: str) -> None:
+        for order in self.client.get_resting_orders(ticker):
+            self.client.cancel_order(order["order_id"], ticker)
 
     def place_order(self, ticker: str, side: str, count: int, price: int):
         return self.client.place_order(ticker, side, count, price)

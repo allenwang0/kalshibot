@@ -12,6 +12,15 @@ class FakeClient:
     def get_balance(self):
         return self.balance
 
+    def get_positions(self):
+        return {}
+
+    def get_resting_orders(self, ticker):
+        return []
+
+    def cancel_order(self, order_id, ticker):
+        pass
+
     def get_market_orderbook(self, ticker):
         return self.book
 
