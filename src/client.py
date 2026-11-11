@@ -1,7 +1,9 @@
 import time
 import base64
 import random
+import threading
 import uuid
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 import requests
@@ -22,6 +24,29 @@ BACKOFF_CAP = 8.0  # seconds
 REQUEST_TIMEOUT = 10.0  # seconds
 
 
+class TokenBucket:
+    """Thread-safe limiter: at most `rate` requests per second, burst of `rate`."""
+
+    def __init__(self, rate: float, sleep: Callable[[float], None] = time.sleep):
+        self.rate = rate
+        self.tokens = rate
+        self.updated = time.monotonic()
+        self.lock = threading.Lock()
+        self.sleep = sleep
+
+    def acquire(self) -> None:
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                self.tokens = min(self.rate, self.tokens + (now - self.updated) * self.rate)
+                self.updated = now
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return
+                wait = (1 - self.tokens) / self.rate
+            self.sleep(wait)
+
+
 class KalshiAPIError(Exception):
     def __init__(self, status: int, body: str):
         super().__init__(f"Kalshi API error {status}: {body}")
@@ -36,6 +61,7 @@ class KalshiClient:
         self.key_id = settings.API_KEY_ID
         self.private_key = None
         self._sleep = time.sleep
+        self.limiter = TokenBucket(settings.RATE_LIMIT_PER_SEC)
 
     def _load_private_key(self):
         if not settings.PRIVATE_KEY_PATH:
@@ -89,6 +115,7 @@ class KalshiClient:
                 })
 
             last_try = attempt == MAX_RETRIES
+            self.limiter.acquire()
             try:
                 response = self.session.request(method, url, headers=headers, params=params, json=data,
                                                 timeout=REQUEST_TIMEOUT)
