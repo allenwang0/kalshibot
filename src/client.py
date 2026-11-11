@@ -66,6 +66,19 @@ class KalshiClient:
     def get_market_orderbook(self, ticker: str):
         return self.request('GET', f'/markets/{ticker}/orderbook')
 
+    def get_markets(self, series_ticker: str, status: str = 'open') -> list:
+        # https://docs.kalshi.com/api-reference/market/get-markets
+        markets, cursor = [], None
+        while True:
+            params = {'series_ticker': series_ticker, 'status': status, 'limit': 1000}
+            if cursor:
+                params['cursor'] = cursor
+            data = self.request('GET', '/markets', params=params)
+            markets.extend(data.get('markets', []))
+            cursor = data.get('cursor')
+            if not cursor:
+                return markets
+
     def get_balance(self):
         data = self.request('GET', '/portfolio/balance')
         if data:

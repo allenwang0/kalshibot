@@ -17,9 +17,9 @@ def test_second_cycle_with_target_held_sends_nothing(tmp_path):
     # Without position tracking every 60s cycle re-sized from the full bankroll
     # and stacked another order on top of the last one.
     bot, ex = _paper_bot(tmp_path, FakeClient(book=DEEP_BOOK))
-    bot.run_cycle(["KXFED-TEST-T4.00"])
+    bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
     assert len(ex.fills()) == 1
-    bot.run_cycle(["KXFED-TEST-T4.00"])
+    bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
     assert len(ex.fills()) == 1
 
 
@@ -41,7 +41,7 @@ def test_live_cancels_resting_orders_and_buys_only_the_difference(monkeypatch):
     from src.executor import LiveExecutor
     client = LiveFake()
     bot = engine.TradingBot(client=client, executor=LiveExecutor(client), alpha=FakeAlpha())
-    bot.run_cycle(["KXFED-TEST-T4.00"])
+    bot.run_cycle([{"ticker": "KXFED-TEST-T4.00"}])
     assert client.cancelled == ["o1"]
     (_, _, count, price), = client.live_orders
     # target is capped at MAX_POSITION_SIZE dollars; $50 is already held
@@ -53,7 +53,7 @@ def test_exposure_caps_hold_over_random_books_and_bankrolls(tmp_path):
     # bankrolls, model probabilities and repeated cycles, dollars at risk never
     # exceed MAX_POSITION_SIZE per market or MAX_TOTAL_EXPOSURE overall.
     rng = random.Random(1234)
-    tickers = [f"KXFED-TEST-T{i}" for i in range(6)]
+    tickers = [{"ticker": f"KXFED-TEST-T{i}"} for i in range(6)]
     for trial in range(200):
         bankroll = rng.uniform(1, 20000)
 
