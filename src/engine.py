@@ -1,17 +1,19 @@
 import math
 from src.client import KalshiClient
+from src.executor import make_executor
 from src.risk import RiskManager
 from src.strategy import AlphaModel
 
 
 class TradingBot:
-    def __init__(self):
-        self.client = KalshiClient()
-        self.alpha = AlphaModel()
-        self.risk = RiskManager()
+    def __init__(self, client=None, executor=None, alpha=None, risk=None):
+        self.client = client or KalshiClient()
+        self.executor = executor or make_executor(self.client)
+        self.alpha = alpha or AlphaModel()
+        self.risk = risk or RiskManager()
 
     def run_cycle(self, ticker_list):
-        bankroll = self.client.get_balance()
+        bankroll = self.executor.get_balance()
         print(f"Current Bankroll: ${bankroll:.2f}")
         if bankroll < 1: return
 
@@ -33,5 +35,5 @@ class TradingBot:
             if alloc > 1.0:
                 count = math.floor(alloc / market_price)
                 if count > 0:
-                    self.client.place_order(ticker, "yes", count, best_ask_cents)
+                    self.executor.place_order(ticker, "yes", count, best_ask_cents)
                     print(f">>> ORDER SENT: Buy {count} @ {best_ask_cents}¢")

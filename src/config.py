@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     BASE_URL: str = Field("https://api.kalshi.com/trade-api/v2", validation_alias="KALSHI_API_URL")
     # PAPER never sends orders to Kalshi. LIVE must be set explicitly.
     TRADING_MODE: Literal["PAPER", "LIVE"] = "PAPER"
+    PAPER_BANKROLL: float = 1000.0
+    PAPER_DB_PATH: str = "paper_trades.db"
 
     # Risk Settings
     KELLY_FRACTION: float = 0.20
