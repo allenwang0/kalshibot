@@ -13,8 +13,15 @@ class AlphaModel:
         now = datetime.datetime.now().timestamp()
         if now - self.last_update > self.cache_duration:
             print("[STRATEGY] Refreshing CME FedWatch data...")
-            self.cache = self.cme.get_probabilities()
-            self.last_update = now
+            data = self.cme.get_probabilities()
+            if data:
+                self.cache = data
+                self.last_update = now
+            else:
+                # Leave last_update alone so the next call retries; no model
+                # prices (and no trades) until the data loads.
+                print("[STRATEGY] CME data unavailable; skipping model prices")
+                self.cache = {}
 
     def parse_market(self, market: dict):
         """Map a market from GET /markets to (FOMC meeting date, threshold in bps).

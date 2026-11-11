@@ -1,4 +1,6 @@
 import time
+import requests
+from src.client import KalshiAPIError
 from src.engine import TradingBot
 
 def main():
@@ -6,7 +8,10 @@ def main():
     bot = TradingBot()
     try:
         while True:
-            bot.run_cycle()
+            try:
+                bot.run_cycle()
+            except (KalshiAPIError, requests.RequestException) as e:
+                print(f"[CYCLE SKIPPED] {e}")
             time.sleep(60)
     except KeyboardInterrupt:
         print("Stopped.")
