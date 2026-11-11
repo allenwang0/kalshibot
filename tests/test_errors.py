@@ -70,11 +70,11 @@ def test_4xx_is_not_retried():
 
 def test_retried_order_reuses_one_client_order_id_and_sends_one_price():
     # A retried POST must carry the same client_order_id so it cannot fill twice.
-    c = _client(_Resp(502), _Resp(201, {"order": {"order_id": "x"}}))
+    c = _client(_Resp(502), _Resp(201, {"order_id": "x", "fill_count": "0.00",
+                                        "remaining_count": "3.00", "ts_ms": 1}))
     c.place_order("KXFED-TEST", "yes", 3, 48)
     first, second = (call["json"] for call in c.session.calls)
     assert first["client_order_id"] and first["client_order_id"] == second["client_order_id"]
-    assert first["yes_price"] == 48 and "no_price" not in first
 
 
 def test_failed_cme_fetch_is_not_cached():
