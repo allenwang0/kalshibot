@@ -8,6 +8,7 @@ retrieved when this was written, so the plan's "reproduce CME's example within
 
 import datetime
 import math
+from pathlib import Path
 
 import pytest
 from hypothesis import given
@@ -85,3 +86,9 @@ def test_each_meeting_is_a_probability_distribution(meeting_month_offsets, rates
         assert math.isclose(sum(dist.values()), 1.0, abs_tol=1e-9)
         assert all(p >= 0 for p in dist.values())
         assert all(u >= 25 and u % 25 == 0 for u in dist)
+
+
+def test_example_price_file_is_labeled_synthetic_and_still_loads():
+    path = Path(__file__).resolve().parent.parent / "data" / "fed_funds_futures.example.csv"
+    assert path.read_text().startswith("# SYNTHETIC")
+    assert load_prices(path)[(2026, 11)] == 96.36

@@ -35,10 +35,10 @@ Distribution = dict[int, float]
 
 
 def load_prices(path: str | Path) -> dict[Month, float]:
-    """Read a CSV with columns month (YYYY-MM) and price."""
+    """Read a CSV with columns month (YYYY-MM) and price; lines starting with # are notes."""
     prices: dict[Month, float] = {}
     with open(path, newline="") as f:
-        for row in csv.DictReader(f):
+        for row in csv.DictReader(line for line in f if not line.startswith("#")):
             year, month = row["month"].strip().split("-")
             prices[(int(year), int(month))] = float(row["price"])
     return prices
