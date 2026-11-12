@@ -8,7 +8,7 @@ from src.client import KalshiClient
 from src.config import settings
 from src.executor import Executor, PaperExecutor, make_executor
 from src.ledger import Ledger, utc_now
-from src.risk import RiskManager, taker_fee
+from src.risk import RiskManager, fee_adjusted_price, taker_fee
 from src.strategy import AlphaModel, meeting_date
 
 log = logging.getLogger(__name__)
@@ -38,6 +38,15 @@ class TradingBot:
                 lambda t: parse_orderbook(self.client.get_market_orderbook(t)), tickers
             )
             return dict(zip(tickers, books, strict=True))
+
+    def _alert_edge(self, ticker: str, book: Book, model_p: float) -> None:
+        mid = (book.best_yes_bid + book.best_yes_ask) / 200.0
+        ask = book.best_yes_ask / 100.0
+        edge = abs(model_p - mid) - (fee_adjusted_price(ask) - ask)
+        if edge > settings.EDGE_ALERT_THRESHOLD:
+            log.warning(
+                "EDGE %s model %.3f mid %.3f edge after fee %.3f", ticker, model_p, mid, edge
+            )
 
     def run_cycle(self, markets: list[dict[str, Any]] | None = None) -> None:
         if markets is None:
@@ -77,6 +86,8 @@ class TradingBot:
                     best_ask=book.best_yes_ask,
                     mid=(book.best_yes_bid + book.best_yes_ask) / 200.0,
                 )
+            if book is not None and fair_prob is not None:
+                self._alert_edge(ticker, book, fair_prob)
             if book is None:
                 row["action"] = "skip: empty book side"
             elif book.spread > settings.MAX_SPREAD_CENTS:

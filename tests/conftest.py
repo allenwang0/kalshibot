@@ -23,6 +23,7 @@ for _name in list(os.environ):
         "CURRENT_TARGET_UPPER_BPS",
         "SHRINKAGE",
         "FEE_RATE",
+        "EDGE_ALERT_THRESHOLD",
     }:
         del os.environ[_name]
 # Ledgers built from default settings stay in memory, never in the working tree.
