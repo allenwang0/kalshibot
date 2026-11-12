@@ -11,10 +11,10 @@ The screenshot shows the report built from synthetic sample data (`scripts/make_
 1. Futures prices to meeting probabilities (`src/models/fedfunds.py`). Each futures contract implies an average rate for its month (100 minus the price). In a month with an FOMC meeting, the old rate holds through the meeting day and the new rate holds after it, so the post-meeting rate can be solved from that average. A month with no meeting pins its own rate, which anchors the months around it. Each meeting's expected move is split between the two nearest 25 bp outcomes and chained from the current target range.
 2. Fair value per contract (`src/strategy.py`). A `KXFED` market resolves YES if the upper bound of the target range is above its strike after the meeting it closes on. Fair value is the model's probability of every range above the strike.
 3. Book (`src/book.py`). Kalshi returns resting bids only. The best YES ask is 100 minus the best NO bid.
-4. Sizing (`src/risk.py`). The model probability is shrunk toward the ask (`SHRINKAGE`), the ask is raised by Kalshi's taker fee (0.07 x P x (1 - P) per contract), and the Kelly fraction of that bet is scaled by `KELLY_FRACTION`. Each cycle cancels resting orders, reads positions, and buys only the gap to the target.
+4. Sizing (`src/risk.py`). The model probability is shrunk toward the ask (`SHRINKAGE`), the ask is raised by Kalshi's taker fee (0.07 x P x (1 - P) per contract), and the Kelly fraction of that bet is scaled by `KELLY_FRACTION`. Each cycle cancels resting orders on the series' markets (orders on other markets are left alone), reads positions, and buys only the gap to the target.
 5. Executor (`src/executor.py`). Paper mode records fills and fees in SQLite and never sends an order. Live mode sends limit buys through Create Order V2.
 
-Every cycle logs one row per market to SQLite: time, ticker, strike, meeting date, model probability, best bid and ask, mid, and the action taken.
+Every cycle logs one row per market to SQLite: time, ticker, strike, meeting date, model probability, best bid and ask, mid, and the action taken. When the model and the mid differ by more than `EDGE_ALERT_THRESHOLD` (0.05) after the taker fee, the bot also logs an `EDGE` line, so a paper run can flag trades to place by hand.
 
 Risk limits and defaults (`src/config.py`, all overridable from the environment):
 
@@ -49,14 +49,21 @@ uv sync
 cp .env.example .env
 ```
 
-Set in `.env`:
+Uncomment and set in `.env`:
 
 - `CURRENT_TARGET_UPPER_BPS`: the upper bound of the current FOMC target range in basis points (400 for 3.75 to 4.00 percent).
-- `FUTURES_PRICES_PATH`: a CSV with columns `month` (YYYY-MM) and `price`, one row per 30-Day Fed Funds futures contract month. You supply this file. `data/fed_funds_futures.example.csv` shows the format; its prices are made up.
+- `FUTURES_PRICES_PATH`: a CSV with columns `month` (YYYY-MM) and `price`, one row per 30-Day Fed Funds futures contract month. You supply this file. `data/fed_funds_futures.example.csv` shows the format; its prices are synthetic.
 - `KALSHI_API_URL`: production is `https://external-api.kalshi.com/trade-api/v2`, demo is `https://external-api.demo.kalshi.co/trade-api/v2`. Demo needs demo keys.
 - `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH`: only for live mode. Keep the key file in `keys/`, which is git-ignored.
 
 ## Usage
+
+Offline first run: one paper cycle against recorded market data (Kalshi response shapes with fabricated prices), with no keys and no network:
+
+```sh
+cp data/fed_funds_futures.example.csv data/fed_funds_futures.csv
+CURRENT_TARGET_UPPER_BPS=400 uv run python main.py --once --replay tests/fixtures/replay.json
+```
 
 Paper mode, one cycle (reads public market data only, no keys needed):
 
@@ -70,6 +77,12 @@ Run continuously, one cycle every `LOOP_SECONDS` (60):
 uv run python main.py
 ```
 
+Backfill settled markets from the last 8 meetings, so the evaluation has data before months of paper trading. It reads public endpoints only; the futures archive is yours to supply (columns `date`, `month`, `price`, `current_upper_bps`):
+
+```sh
+uv run python scripts/backfill.py --prices data/fed_funds_futures_history.csv --meetings 8
+```
+
 Evaluate:
 
 ```sh
@@ -79,7 +92,7 @@ uv run python scripts/evaluate.py --card site/card.json  # refuses synthetic or 
 uv run python scripts/screenshot.py docs/report/index.html
 ```
 
-Live mode spends real money. It needs `TRADING_MODE=LIVE`, `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH`; the bot exits at startup if any is missing. Any other spelling of the mode, such as `live`, is rejected.
+Live mode spends real money. It needs `TRADING_MODE=LIVE`, `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH`; the bot exits at startup if any is missing. Any other spelling of the mode, such as `live`, is rejected. A `--once` run whose cycle fails on an API or network error exits with code 1.
 
 Tests, lint and types:
 
@@ -103,4 +116,4 @@ Kalshi and CME data have their own terms. The report uses public market prices a
 
 ## License
 
-No license has been chosen yet.
+MIT. See [LICENSE](LICENSE).
