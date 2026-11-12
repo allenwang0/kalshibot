@@ -32,6 +32,7 @@ exclude-newer = "2026-10-28T07:00:00Z"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["live_order_path: the test calls KalshiClient.place_order on purpose"]
 
 [tool.ruff]
 line-length = 100
