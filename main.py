@@ -11,11 +11,11 @@ from src.engine import TradingBot
 log = logging.getLogger("kalshibot")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Trade Kalshi Fed-rate markets.")
     parser.add_argument("--series", default=settings.SERIES_TICKER, help="Kalshi series ticker")
     parser.add_argument("--once", action="store_true", help="run one cycle and exit")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     settings.SERIES_TICKER = args.series
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -29,6 +29,8 @@ def main() -> None:
                 bot.run_cycle()
             except (KalshiAPIError, requests.RequestException) as e:
                 log.error("cycle skipped: %s", e)
+                if args.once:
+                    raise SystemExit(1) from e
             if args.once:
                 break
             time.sleep(settings.LOOP_SECONDS)
