@@ -1,0 +1,178 @@
+{
+ "_note": "Recorded response shapes with fabricated prices. Not market data.",
+ "/markets": {
+  "markets": [
+   {
+    "ticker": "KXFED-26DEC-T3.50",
+    "event_ticker": "KXFED-26DEC",
+    "status": "active",
+    "strike_type": "greater",
+    "floor_strike": 3.5,
+    "occurrence_datetime": "2026-12-09T19:00:00Z",
+    "close_time": "2026-12-09T19:00:00Z",
+    "result": ""
+   },
+   {
+    "ticker": "KXFED-26DEC-T3.75",
+    "event_ticker": "KXFED-26DEC",
+    "status": "active",
+    "strike_type": "greater",
+    "floor_strike": 3.75,
+    "occurrence_datetime": "2026-12-09T19:00:00Z",
+    "close_time": "2026-12-09T19:00:00Z",
+    "result": ""
+   },
+   {
+    "ticker": "KXFED-26DEC-T4.00",
+    "event_ticker": "KXFED-26DEC",
+    "status": "active",
+    "strike_type": "greater",
+    "floor_strike": 4.0,
+    "occurrence_datetime": "2026-12-09T19:00:00Z",
+    "close_time": "2026-12-09T19:00:00Z",
+    "result": ""
+   },
+   {
+    "ticker": "KXFED-27JAN-T3.50",
+    "event_ticker": "KXFED-27JAN",
+    "status": "active",
+    "strike_type": "greater",
+    "floor_strike": 3.5,
+    "occurrence_datetime": "2027-01-27T19:00:00Z",
+    "close_time": "2027-01-27T19:00:00Z",
+    "result": ""
+   },
+   {
+    "ticker": "KXFED-27JAN-T3.75",
+    "event_ticker": "KXFED-27JAN",
+    "status": "active",
+    "strike_type": "greater",
+    "floor_strike": 3.75,
+    "occurrence_datetime": "2027-01-27T19:00:00Z",
+    "close_time": "2027-01-27T19:00:00Z",
+    "result": ""
+   }
+  ],
+  "cursor": ""
+ },
+ "/markets/KXFED-26DEC-T3.50/orderbook": {
+  "orderbook_fp": {
+   "yes_dollars": [
+    [
+     "0.9100",
+     "150.00"
+    ],
+    [
+     "0.9200",
+     "40.00"
+    ]
+   ],
+   "no_dollars": [
+    [
+     "0.0200",
+     "80.00"
+    ],
+    [
+     "0.0400",
+     "25.00"
+    ]
+   ]
+  }
+ },
+ "/markets/KXFED-26DEC-T3.75/orderbook": {
+  "orderbook_fp": {
+   "yes_dollars": [
+    [
+     "0.4300",
+     "150.00"
+    ],
+    [
+     "0.4400",
+     "40.00"
+    ]
+   ],
+   "no_dollars": [
+    [
+     "0.5100",
+     "80.00"
+    ],
+    [
+     "0.5300",
+     "25.00"
+    ]
+   ]
+  }
+ },
+ "/markets/KXFED-26DEC-T4.00/orderbook": {
+  "orderbook_fp": {
+   "yes_dollars": [
+    [
+     "0.0100",
+     "150.00"
+    ],
+    [
+     "0.0200",
+     "40.00"
+    ]
+   ],
+   "no_dollars": [
+    [
+     "0.9400",
+     "80.00"
+    ],
+    [
+     "0.9600",
+     "25.00"
+    ]
+   ]
+  }
+ },
+ "/markets/KXFED-27JAN-T3.50/orderbook": {
+  "orderbook_fp": {
+   "yes_dollars": [
+    [
+     "0.5900",
+     "150.00"
+    ],
+    [
+     "0.6000",
+     "40.00"
+    ]
+   ],
+   "no_dollars": [
+    [
+     "0.3400",
+     "80.00"
+    ],
+    [
+     "0.3600",
+     "25.00"
+    ]
+   ]
+  }
+ },
+ "/markets/KXFED-27JAN-T3.75/orderbook": {
+  "orderbook_fp": {
+   "yes_dollars": [
+    [
+     "0.1700",
+     "150.00"
+    ],
+    [
+     "0.1800",
+     "40.00"
+    ]
+   ],
+   "no_dollars": [
+    [
+     "0.7700",
+     "80.00"
+    ],
+    [
+     "0.7900",
+     "25.00"
+    ]
+   ]
+  }
+ }
+}
