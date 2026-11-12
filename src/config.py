@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Below $1 the one-cent fee rounding is a large share of the order.
     MIN_ORDER_DOLLARS: float = 1.0
     MIN_BANKROLL_DOLLARS: float = 1.0
+    # Log an EDGE line when |model p - mid| minus the per-contract taker fee
+    # exceeds this, so a paper run can flag trades to place by hand.
+    EDGE_ALERT_THRESHOLD: float = 0.05
 
     # Loop and request pacing
     # Fed-rate books move on data releases, not by the second; one cycle a
