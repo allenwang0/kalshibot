@@ -20,6 +20,7 @@ def test_default_host_is_the_documented_production_server():
     assert settings.BASE_URL == "https://external-api.kalshi.com/trade-api/v2"
 
 
+@pytest.mark.live_order_path
 def test_order_uses_create_order_v2_with_dollar_strings():
     c = _client(
         _Resp(201, {"order_id": "x", "fill_count": "0.00", "remaining_count": "3.00", "ts_ms": 1})
@@ -40,6 +41,7 @@ def test_order_uses_create_order_v2_with_dollar_strings():
     }
 
 
+@pytest.mark.live_order_path
 @pytest.mark.parametrize(
     "side,count,price", [("no", 1, 50), ("yes", 0, 50), ("yes", 1, 0), ("yes", 1, 100)]
 )

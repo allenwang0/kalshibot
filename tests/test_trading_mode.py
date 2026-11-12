@@ -98,3 +98,14 @@ def test_paper_cycle_sends_only_get_requests_over_http(monkeypatch, tmp_path):
     bot.run_cycle()
     assert len(bot.executor.fills()) == 1
     assert set(Session.methods) == {"GET"}
+
+
+def test_the_live_order_guard_trips_when_place_order_is_reached():
+    # Proves the autouse guard in conftest.py is active for every unmarked test,
+    # so no test can reach a live order path without saying so.
+    import pytest
+
+    from src.client import KalshiClient
+
+    with pytest.raises(pytest.fail.Exception, match="place_order was called"):
+        KalshiClient().place_order("KXFED-X", "yes", 1, 50)

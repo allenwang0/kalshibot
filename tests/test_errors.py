@@ -67,6 +67,7 @@ def test_4xx_is_not_retried():
     assert len(c.session.calls) == 1
 
 
+@pytest.mark.live_order_path
 def test_retried_order_reuses_one_client_order_id_and_sends_one_price():
     # A retried POST must carry the same client_order_id so it cannot fill twice.
     c = _client(
