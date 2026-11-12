@@ -32,3 +32,4 @@ docs/screenshots/
 # Futures prices you supply
 data/fed_funds_futures.csv
 data/fed_funds_futures_history.csv
+*.egg-info/
