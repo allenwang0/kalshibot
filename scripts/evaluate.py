@@ -543,8 +543,6 @@ code {{ font-size: 0.9em; }}
 <h1>kalshibot evaluation</h1>
 <p class="sub">{subtitle}</p>
 {sections}
-<p class="sub">Generated {generated} by <code>{command}</code>. Data: Kalshi market prices
-and fed funds futures prices. No account balances, order IDs or keys.</p>
 </main>
 <script>
 (function () {{
@@ -576,7 +574,7 @@ def _section(key: str, question: str, takeaway: str, body: str, synthetic: bool)
     )
 
 
-def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any], command: str) -> str:
+def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
     import plotly.io as pio
 
     first = {"done": False}
@@ -644,12 +642,9 @@ def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any], command
         subtitle = f"{r.cycles} cycles logged since {since}."
     if r.synthetic:
         subtitle = "SYNTHETIC SAMPLE. " + subtitle
-    generated = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M UTC")
     page = PAGE.format(
         subtitle=html.escape(subtitle),
         sections="\n".join(sections),
-        generated=generated,
-        command=html.escape(command),
     )
     if not first["done"]:
         page = page.replace('document.querySelectorAll(".js-plotly-plot")', "[]")
@@ -775,7 +770,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.html:
         out = Path(args.html)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(render_html(conn, r, s, command))
+        out.write_text(render_html(conn, r, s))
         print(f"wrote {out}")
     if args.card:
         card = build_card(s, command)
