@@ -14,6 +14,7 @@ A trading bot for Kalshi's Fed-rate contracts. It turns Fed Funds futures prices
 ## Run it
 
 ```sh
+git clone https://github.com/allenwang0/kalshibot.git && cd kalshibot
 uv sync
 cp .env.example .env
 cp data/fed_funds_futures.example.csv data/fed_funds_futures.csv
