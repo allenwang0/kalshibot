@@ -82,14 +82,15 @@ def test_html_has_all_four_views_and_the_brier_numbers(tmp_path):
     for title in evaluate.VIEW_TITLES.values():
         assert title in page
     assert f"Model Brier {_expected_brier(1):.3f} vs market {_expected_brier(2):.3f}" in page
-    assert "SYNTHETIC" not in page
+    assert "Synthetic data" not in page
 
 
 def test_synthetic_data_is_bannered_and_refused_for_the_card(tmp_path):
     db = _db(tmp_path, synthetic=True)
     out = tmp_path / "report.html"
     evaluate.main(["--db", str(db), "--html", str(out)])
-    assert out.read_text().count("SYNTHETIC DATA") == 4
+    # One disclosure at the top, not one per card.
+    assert out.read_text().count("Synthetic data:") == 1
     with pytest.raises(SystemExit) as e:
         evaluate.main(["--db", str(db), "--card", str(tmp_path / "card.json")])
     assert e.value.code != 0

@@ -514,46 +514,63 @@ PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kalshibot evaluation</title>
+<title>Kalshi Bot evaluation · Allen Wang</title>
+<script>
+try {{
+  var t = localStorage.getItem("theme");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+}} catch (e) {{}}
+</script>
 <style>
-:root {{ --bg: #ffffff; --fg: #1a1a1a; --muted: #5a5a5a; --card: #f5f5f4; --warn: #8a4b00;
-         --warn-bg: #fff3e0; --grid: #dddddd; }}
+:root {{ --bg: #fbfbf9; --fg: #111111; --muted: #5f5f63; --accent: #d70015; --card: #f2f2ef;
+         --grid: #dddddd; color-scheme: light; }}
 @media (prefers-color-scheme: dark) {{
-  :root {{ --bg: #121212; --fg: #ececec; --muted: #a8a8a8; --card: #1e1e1e; --warn: #ffcc80;
-           --warn-bg: #3a2a10; --grid: #3a3a3a; }}
+  :root:not([data-theme="light"]) {{ --bg: #0b0b0b; --fg: #f2f2ef; --muted: #a1a1a6;
+           --accent: #ff5a4f; --card: #161616; --grid: #3a3a3a; color-scheme: dark; }}
 }}
+:root[data-theme="dark"] {{ --bg: #0b0b0b; --fg: #f2f2ef; --muted: #a1a1a6; --accent: #ff5a4f;
+         --card: #161616; --grid: #3a3a3a; color-scheme: dark; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--bg); color: var(--fg);
-        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }}
-main {{ max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }}
+        font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
+              Helvetica, Arial, sans-serif; }}
+main {{ max-width: 960px; margin: 0 auto; padding: 0 16px 48px; }}
+.site-nav {{ display: flex; justify-content: space-between; gap: 16px; padding: 16px 0 24px;
+             font-size: 14px; }}
+.site-nav a {{ color: var(--muted); text-decoration: none; }}
+.site-nav a:hover {{ color: var(--fg); }}
 h1 {{ font-size: 1.5rem; margin: 0 0 4px; }}
 h2 {{ font-size: 1.15rem; margin: 0 0 4px; }}
+.synthetic {{ color: var(--muted); font-size: 14px; margin: 0 0 4px; }}
 .sub {{ color: var(--muted); margin: 0 0 24px; }}
 section {{ background: var(--card); border-radius: 8px; padding: 16px; margin: 0 0 20px; }}
 .takeaway {{ margin: 0 0 8px; }}
 .question {{ color: var(--muted); margin: 0 0 8px; font-size: 0.9rem; }}
-.banner {{ background: var(--warn-bg); color: var(--warn); border-radius: 6px;
-           padding: 6px 10px; margin: 0 0 10px; font-weight: 600; font-size: 0.9rem; }}
+.note {{ color: var(--muted); margin: 8px 0 0; font-size: 0.85rem; }}
 .empty {{ color: var(--muted); padding: 32px 0; text-align: center; }}
 code {{ font-size: 0.9em; }}
 </style>
 </head>
 <body>
 <main>
-<h1>kalshibot evaluation</h1>
-<p class="sub">{subtitle}</p>
+<nav class="site-nav" aria-label="Site"><a href="https://allenwang0.github.io/">← Allen Wang</a><a href="https://github.com/allenwang0/kalshibot">Source</a></nav>
+<h1>Kalshi Bot evaluation</h1>
+{synthetic}<p class="sub">{subtitle}</p>
 {sections}
 </main>
 <script>
 (function () {{
-  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   var css = getComputedStyle(document.documentElement);
   var fg = css.getPropertyValue("--fg").trim(), grid = css.getPropertyValue("--grid").trim();
+  var bg = css.getPropertyValue("--bg").trim(), card = css.getPropertyValue("--card").trim();
   document.querySelectorAll(".js-plotly-plot").forEach(function (el) {{
     Plotly.relayout(el, {{"font.color": fg, "xaxis.gridcolor": grid, "yaxis.gridcolor": grid,
-      "xaxis.zerolinecolor": grid, "yaxis.zerolinecolor": grid}});
+      "xaxis.zerolinecolor": grid, "yaxis.zerolinecolor": grid,
+      "hoverlabel.bgcolor": bg, "hoverlabel.font.color": fg,
+      "updatemenus[0].bgcolor": card, "updatemenus[0].bordercolor": grid,
+      "updatemenus[0].font.color": fg}});
+    if (el.id === "reliability") Plotly.restyle(el, {{"marker.line.color": card}}, [1, 2]);
   }});
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
 }})();
 </script>
 </body>
@@ -561,14 +578,9 @@ code {{ font-size: 0.9em; }}
 """
 
 
-def _section(key: str, question: str, takeaway: str, body: str, synthetic: bool) -> str:
-    banner = (
-        '<p class="banner">SYNTHETIC DATA from scripts/make_sample.py. Not real results.</p>'
-        if synthetic
-        else ""
-    )
+def _section(key: str, question: str, takeaway: str, body: str) -> str:
     return (
-        f'<section id="view-{key}"><h2>{VIEW_TITLES[key]}</h2>{banner}'
+        f'<section id="view-{key}"><h2>{VIEW_TITLES[key]}</h2>'
         f'<p class="question">{html.escape(question)}</p>'
         f'<p class="takeaway">{html.escape(takeaway)}</p>{body}</section>'
     )
@@ -596,7 +608,10 @@ def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
     sections = []
     ts_fig, n_contracts = fig_timeseries(conn)
     if s["n"]:
-        body_a = plot(fig_reliability(s), "reliability")
+        body_a = plot(fig_reliability(s), "reliability") + (
+            '<p class="note">Marker size grows with the number of contracts in each bin; '
+            "hover a marker for its count.</p>"
+        )
         take_a = brier_takeaway(s)
     else:
         body_a, take_a = empty, "No contracts scored yet"
@@ -606,7 +621,6 @@ def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
             "When the model says 30%, does it happen 30% of the time?",
             take_a,
             body_a,
-            r.synthetic,
         )
     )
     sections.append(
@@ -615,7 +629,6 @@ def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
             "Where did the model and market disagree, and who was right?",
             f"{n_contracts} contracts logged; pick one from the menu",
             plot(ts_fig, "timeseries") if n_contracts else empty,
-            r.synthetic,
         )
     )
     if r.pnl:
@@ -623,26 +636,39 @@ def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
         body_c = plot(fig_c, "pnl")
     else:
         body_c, take_c = empty, "No settled paper fills yet"
-    sections.append(
-        _section("c", "Does the strategy make money after fees?", take_c, body_c, r.synthetic)
-    )
+    sections.append(_section("c", "Does the strategy make money after fees?", take_c, body_c))
     if r.edges:
         fig_d, take_d = fig_edges(r)
         body_d = plot(fig_d, "edges")
     else:
         body_d, take_d = empty, "No settled paper fills yet"
-    sections.append(_section("d", "Do bigger edges earn more?", take_d, body_d, r.synthetic))
+    sections.append(_section("d", "Do bigger edges earn more?", take_d, body_d))
     if s["n"]:
         subtitle = (
             f"{s['n']} settled Kalshi Fed-rate contracts, {s['first_settled']} to "
             f"{s['last_settled']}. Model log loss {s['model_log_loss']:.3f}, "
             f"market {s['market_log_loss']:.3f}."
         )
+        log_loss_favors_model = s["model_log_loss"] < s["market_log_loss"]
+        brier_favors_model = s["model_brier"] < s["market_brier"]
+        if log_loss_favors_model != brier_favors_model:
+            subtitle += (
+                f" The two scores disagree: log loss favors the "
+                f"{'model' if log_loss_favors_model else 'market'}, while Brier "
+                f"({s['model_brier']:.3f} vs {s['market_brier']:.3f}) favors the "
+                f"{'model' if brier_favors_model else 'market'}; with {s['n']} contracts "
+                "neither difference is meaningful."
+            )
     else:
         subtitle = f"{r.cycles} cycles logged since {since}."
-    if r.synthetic:
-        subtitle = "SYNTHETIC SAMPLE. " + subtitle
+    synthetic = (
+        '<p class="synthetic">Synthetic data: generated by scripts/make_sample.py. '
+        "Not real results.</p>\n"
+        if r.synthetic
+        else ""
+    )
     page = PAGE.format(
+        synthetic=synthetic,
         subtitle=html.escape(subtitle),
         sections="\n".join(sections),
     )
