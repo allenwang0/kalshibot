@@ -39,7 +39,6 @@ WORDS = {
     8: "eight",
     9: "nine",
 }
-NB = "\u202f"  # narrow no-break space between a number and its unit
 FIG_LABEL = "Replay fixture: fabricated prices, not a result"
 # Light-theme values of the kit tokens, for the standalone README SVG (no page CSS there).
 SVG_STYLE = (
@@ -187,7 +186,7 @@ def build_page(snap, shas):
         ),
         (
             "E4",
-            f"Scored on the last price at least {horizon:g} days before settlement",
+            f"Scored on the last price at least {rk.num(f'{horizon:g}', 'days')} before settlement",
             f"scripts/evaluate.py:{score[0]}–{score[1]}",
             blob("scripts/evaluate.py", *score),
             "Verified",
@@ -201,82 +200,74 @@ def build_page(snap, shas):
         ),
     ]
 
-    fig = rk.figure(
-        "fig-replay",
-        (
-            f"On fabricated prices, the model falls outside the market's bid–ask range on all {WORDS[outside]} strikes"
-            if outside == len(rows)
-            else f"On fabricated prices, the model falls outside the market's bid–ask range on {outside} of {len(rows)} strikes"
-        ),
-        rk.variants(
-            replay_chart(snap, "rp-d", 1000),
-            replay_chart(snap, "rp-t", 640),
-            replay_chart(snap, "rp-p", 320),
-        ),
-        rk.tag(
-            "p",
-            Raw(
-                f"One offline paper cycle: <code>main.py --once --replay</code> on the replay fixture (recorded API "
-                f"response shapes, fabricated prices) and the synthetic example futures CSV, current upper bound "
-                f"{snap['inputs']['current_target_upper_bps'] / 100:.2f}%. It shows the bot's arithmetic on one snapshot; "
-                f"the gaps are artifacts of made-up prices, not an edge.{R('E1')}"
-            ),
-        ),
-        question="Where does the futures-implied probability sit relative to what the market would charge?",
-        table=rk.data_table(
-            "Replay cycle per strike",
-            ["Strike", "Best bid (¢)", "Best ask (¢)", "Model p", "Action"],
+    takeaway = (
+        f"On fabricated prices, the model falls outside the market's bid–ask range on all {WORDS[outside]} strikes"
+        if outside == len(rows)
+        else f"On fabricated prices, the model falls outside the market's bid–ask range on {outside} of {len(rows)} strikes"
+    )
+    replay_table = rk.data_table(
+        "Replay cycle per strike",
+        ["Strike", "Best bid (¢)", "Best ask (¢)", "Model p", "Action"],
+        [
             [
-                [
-                    row_label(c),
-                    str(c["best_bid"]),
-                    str(c["best_ask"]),
-                    f"{c['model_p']:.3f}",
-                    c["action"],
-                ]
-                for c in rows
-            ],
-            numeric={1, 2, 3},
-        ),
-        data_href=blob("results/replay_cycle.json"),
+                row_label(c),
+                str(c["best_bid"]),
+                str(c["best_ask"]),
+                f"{c['model_p']:.3f}",
+                c["action"],
+            ]
+            for c in rows
+        ],
+        numeric={1, 2, 3},
     )
 
-    hero = Raw(
-        '<section class="hero wrap" aria-labelledby="title" style="padding-bottom:0">'
-        + rk.tag("p", "Trading bot · Python · Paper mode", class_="eyebrow")
-        + rk.tag("h1", "kalshibot", class_="hero-title", id="title")
-        + rk.tag(
-            "p",
-            "Prices Kalshi's Fed-rate contracts from Fed Funds futures, sizes bets after Kalshi's fee, and "
-            "scores its model against the market once contracts settle.",
-            class_="hero-sub",
-        )
-        + rk.tag(
-            "p",
-            Raw(
-                "No real contract has settled in its log yet, so nothing here shows an edge. The figure "
-                "below uses fabricated prices to show what the bot computes."
-            ),
-            class_="hero-context",
-        )
-        + Raw(
-            '<div class="actions">'
-            + rk.tag("a", "Source", href=REPO_URL, class_="btn btn-primary")
-            + "</div>"
-        )
-        + "</section>"
+    hero = rk.hero(
+        eyebrow="Trading bot · Python · Paper mode",
+        title="kalshibot",
+        subtitle="Prices Kalshi's Fed-rate contracts from Fed Funds futures, sizes bets after Kalshi's fee, and "
+        "scores its model against the market once contracts settle.",
+        context="No real contract has settled in its log yet, so nothing here shows an edge. The replay chart "
+        "uses fabricated prices to show what the bot computes.",
+        actions=[("Source", REPO_URL, True)],
+        figure=rk.join(
+            [
+                rk.tag(
+                    "p",
+                    "One paper cycle on the replay fixture, per strike",
+                    class_="card-label",
+                ),
+                rk.variants(
+                    replay_chart(snap, "rp-d", 398),
+                    replay_chart(snap, "rp-t", 640),
+                    replay_chart(snap, "rp-p", 280),
+                ),
+            ]
+        ),
     )
     body = rk.join(
         [
-            fig,
-            Raw('<div class="prose" style="margin-top:40px">'),
+            Raw('<div class="prose">'),
+            rk.tag(
+                "p",
+                Raw(
+                    f"<b>{esc(takeaway)}.</b> The replay chart is one offline paper cycle: "
+                    f"<code>main.py --once --replay</code> on the replay fixture (recorded API response shapes, "
+                    f"fabricated prices) and the synthetic example futures CSV, current upper bound "
+                    f"{snap['inputs']['current_target_upper_bps'] / 100:.2f}%. It shows the bot's arithmetic on one "
+                    f"snapshot; the gaps are artifacts of made-up prices, not an edge.{R('E1')} "
+                    f'<a class="src" href="{esc(blob("results/replay_cycle.json"))}">Data: replay_cycle.json</a>'
+                ),
+            ),
+            Raw("</div>"),
+            replay_table,
+            Raw('<div class="prose" style="margin-top:24px">'),
             rk.tag(
                 "p",
                 Raw(
                     "Each KXFED contract asks whether the upper bound of the Fed's target range will be above a strike after "
                     "a given meeting. Each 30-day Fed Funds future implies an average rate for its month; in a meeting month "
                     "the rate after the meeting can be solved from that average, and each meeting's expected move is split "
-                    "between the two nearest 25 bp outcomes and chained forward. A contract's model price is the probability "
+                    f"between the two nearest {rk.num(25, 'bp')} outcomes and chained forward. A contract's model price is the probability "
                     "of every outcome above its strike."
                 ),
             ),
@@ -309,7 +300,7 @@ def build_page(snap, shas):
                 "p",
                 Raw(
                     f"<b>What would count as evidence.</b> Settled KXFED contracts, each scored on the bot's last price at "
-                    f"least {horizon:g} days before settlement, with Brier score and log loss for the model against the "
+                    f"least {rk.num(f'{horizon:g}', 'days')} before settlement, with Brier score and log loss for the model against the "
                     f"market's mid. <code>scripts/evaluate.py</code> computes exactly that; the log has no settlements "
                     f"yet.{R('E4')}"
                 ),
