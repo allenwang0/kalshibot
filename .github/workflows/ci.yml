@@ -15,10 +15,18 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the brief links sources at the commit that last changed them
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked
+      - name: Report kit matches its pinned hashes
+        run: uv run python report-kit/check_kit.py
+      - name: Committed brief and README Highlights are current
+        run: |
+          uv run python scripts/build_brief.py --readme README.md
+          git diff --exit-code -- docs README.md
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
