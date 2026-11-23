@@ -28,7 +28,18 @@ PAGE_URL = "https://allenwang0.github.io/kalshibot/"
 HOME_URL = "https://allenwang0.github.io/"
 README_START = "<!-- results:start -->"
 README_END = "<!-- results:end -->"
-NB = " "  # narrow no-break space between a number and its unit
+WORDS = {
+    1: "one",
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+    9: "nine",
+}
+NB = "\u202f"  # narrow no-break space between a number and its unit
 FIG_LABEL = "Replay fixture: fabricated prices, not a result"
 # Light-theme values of the kit tokens, for the standalone README SVG (no page CSS there).
 SVG_STYLE = (
@@ -82,7 +93,8 @@ def replay_chart(snap, uid, width):
     phone = width < 420
     rows = snap["cycles"]
     label_w = 0 if phone else max(rk.text_width(row_label(c)) for c in rows) + 18
-    plot_l, plot_r = label_w + 6, width - 20
+    value_w = 48  # model values sit in their own column right of the plot
+    plot_l, plot_r = label_w + 16, width - value_w - 16
     x = lambda p: plot_l + (plot_r - plot_l) * p
     top, row_h = 62, (52 if phone else 40)
     bottom = top + row_h * len(rows)
@@ -110,9 +122,8 @@ def replay_chart(snap, uid, width):
         parts.append(
             f'<circle cx="{rk.coord(x(p))}" cy="{rk.coord(cy)}" r="5.5" class="c-accent"/>'
         )
-        text = f"{p:.2f}"
-        tx = x(p) + 10 if x(p) + 10 + rk.text_width(text) < width else x(p) - 10
-        parts.append(rk.svg_text(tx, cy + 4, text, "c-value", None if tx > x(p) else "end"))
+        parts.append(rk.svg_text(width, cy + 4, f"{p:.2f}", "c-value", "end"))
+    parts.append(rk.svg_text(width, top - 14, "model", "c-title", "end"))
     parts.append(
         rk.svg_text(plot_r, bottom + 38, "Probability the contract settles YES", "c-title", "end")
     )
@@ -192,8 +203,11 @@ def build_page(snap, shas):
 
     fig = rk.figure(
         "fig-replay",
-        f"On fabricated prices, the model falls outside the market's bid–ask range on {outside} of "
-        f"{len(rows)} strikes",
+        (
+            f"On fabricated prices, the model falls outside the market's bid–ask range on all {WORDS[outside]} strikes"
+            if outside == len(rows)
+            else f"On fabricated prices, the model falls outside the market's bid–ask range on {outside} of {len(rows)} strikes"
+        ),
         rk.variants(
             replay_chart(snap, "rp-d", 1000),
             replay_chart(snap, "rp-t", 640),
@@ -205,7 +219,7 @@ def build_page(snap, shas):
                 f"One offline paper cycle: <code>main.py --once --replay</code> on the replay fixture (recorded API "
                 f"response shapes, fabricated prices) and the synthetic example futures CSV, current upper bound "
                 f"{snap['inputs']['current_target_upper_bps'] / 100:.2f}%. It shows the bot's arithmetic on one snapshot; "
-                f"the gaps are artefacts of made-up prices, not an edge.{R('E1')}"
+                f"the gaps are artifacts of made-up prices, not an edge.{R('E1')}"
             ),
         ),
         question="Where does the futures-implied probability sit relative to what the market would charge?",
