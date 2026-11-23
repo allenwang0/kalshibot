@@ -27,7 +27,7 @@
     series: [{ key: "d", name: "Model − market", color: "var(--series-1)" }],
     rows: drows.map(function (r) { return { label: r.label, series: { d: { lo: r.d[1], mid: r.d[0], hi: r.d[2], tip: f3(r.d[0]) + " [" + f3(r.d[1]) + ", " + f3(r.d[2]) + "]" } } }; }),
     xmin: ax.xmin, xmax: ax.xmax, ticks: ax.ticks, format: f3, xLabel: "Model − market (negative favors the model)",
-    refs: [{ x: 0, label: "" }]
+    refs: [{ x: 0, label: "No difference" }]
   });
   RKCharts.table("#t-delta", { caption: "Model minus market score over " + D.n + " contracts; lower is better for both scores",
     columns: [{ key: "m", label: "Score" }, { key: "d", label: "Model − market" }, { key: "lo", label: "95 % CI low" }, { key: "hi", label: "95 % CI high" }],
@@ -62,7 +62,7 @@
     var usd = function (v) { return (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 }); };
     RKCharts.line("#c-pnl", { title: "Cumulative paper P&L after and before fees", x: px, xFormat: function (t) { return MONTHS[new Date(t * 1000).getUTCMonth()] + " " + new Date(t * 1000).getUTCFullYear(); },
       series: [{ key: "after", name: "After fees", color: "var(--series-1)", y: after }, { key: "before", name: "Before fees", color: "var(--series-neutral)", y: before, dash: true }],
-      format: usd, yUnit: "", yLabel: "Cumulative P&L (USD)", xLabel: "Settlement date (UTC)", refs: [{ y: 0, label: "break-even" }] });
+      format: usd, yUnit: "", yLabel: "Cumulative P&L (USD)", xLabel: "Settlement date (UTC)", refs: [{ y: 0, label: "" }] });
     RKCharts.table("#t-pnl", { caption: "Cumulative paper P&L at each settlement (USD)",
       columns: [{ key: "d", label: "Settlement (UTC)" }, { key: "a", label: "After fees" }, { key: "b", label: "Before fees" }],
       rows: P.steps.map(function (s) { return { d: s[0].slice(0, 10), a: f2(s[2]), b: f2(s[1]) }; }) });

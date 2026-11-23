@@ -393,14 +393,16 @@ def report_data(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> dict
     return d
 
 
-def _figure(fid: str, title: str, sub: str, legend: str = "") -> str:
+def _figure(fid: str, title: str, sub: str, legend: str = "", caption: str = "") -> str:
     return (
         f'<figure class="figure" aria-labelledby="f-{fid}"><div class="fig-head"><div>'
         f'<h3 id="f-{fid}">{html.escape(title)}</h3><p class="sub">{html.escape(sub)}</p></div>'
         '<div class="seg" role="radiogroup" aria-label="View" data-view-toggle>'
         '<button role="radio" aria-checked="true" data-value="chart">Chart</button>'
         '<button role="radio" aria-checked="false" data-value="table">Table</button></div></div>'
-        f'{legend}<div id="c-{fid}"></div><div id="t-{fid}" hidden></div></figure>'
+        f'{legend}<div id="c-{fid}"></div><div id="t-{fid}" hidden></div>'
+        + (f"<figcaption>{caption}</figcaption>" if caption else "")
+        + "</figure>"
     )
 
 
@@ -498,12 +500,10 @@ def render_html(
             if {_verdict(*dl[1:]), _verdict(*db[1:])} == {"tie"}
             else "Score differences, model minus market",
             f"Model − market · lower favors the model · n = {n} contracts",
-        )
-        hero += (
-            "<figcaption>Each dot is the model's score minus the market mid's score on the same "
+            caption="Each dot is the model's score minus the market mid's score on the same "
             f"{n} contracts (log loss {_signed(dl[0])}, Brier {_signed(db[0])}). Lines are 95 % "
             f"intervals from {BOOTSTRAP_REPS:,} bootstrap resamples of contracts. An interval "
-            "that crosses zero means this sample can't tell the two apart.</figcaption>"
+            "that crosses zero means this sample can't tell the two apart.",
         )
     else:
         since = d["since"]
@@ -577,10 +577,10 @@ def render_html(
                     ("ring", "Mean forecast"),
                     ("line", "95 % interval"),
                 ),
+                caption="Contracts are grouped by each forecaster's own probability, so a bin "
+                "can hold different contracts for the model and the market. A calibrated "
+                "forecaster's ring sits inside its line.",
             )
-            + "<figcaption>Contracts are grouped by each forecaster's own probability, so a bin "
-            "can hold different contracts for the model and the market. A calibrated "
-            "forecaster's ring sits inside its line.</figcaption>"
             + _caveat(
                 "Small n.",
                 f"Each bin holds {min(counts)}–{max(counts)} contracts, so its 95 % interval is "
@@ -606,11 +606,9 @@ def render_html(
             "pnl",
             "Cumulative P&L after and before fees",
             f"USD · {p['fills']} fills over {p['settlements']} settlement dates",
-        )
-        body += (
-            "<figcaption>Cumulative P&L at each settlement date, starting at $0 on the first "
+            caption="Cumulative P&L at each settlement date, starting at $0 on the first "
             "logged cycle. Fills that settle at the same time count as one step. The dashed line "
-            "adds the fees back.</figcaption>"
+            "adds the fees back.",
         )
         if synth:
             body += _caveat(
@@ -644,11 +642,9 @@ def render_html(
                 ("ring", "Mean model edge"),
                 ("line", "95 % interval"),
             ),
-        )
-        body += (
-            "<figcaption>Fills grouped by the model's edge after fees at the time of the trade. "
+            caption="Fills grouped by the model's edge after fees at the time of the trade. "
             "If the edge were real and correctly sized, each dot would sit on its ring. "
-            "Intervals are mean ± 1.96 standard errors.</figcaption>"
+            "Intervals are mean ± 1.96 standard errors.",
         )
         parts.append(_section("edges", "Do bigger edges earn more?", h2, lede_d, body))
 
@@ -671,9 +667,9 @@ def render_html(
                 "ts",
                 "Model and market mid over the logged cycles",
                 "Probability of YES · band shows bid to ask",
+                caption="Every logged cycle for one contract. Opens on the contract where the "
+                "model and market disagreed most on average.",
             )
-            + "<figcaption>Every logged cycle for one contract. Opens on the contract where the "
-            "model and market disagreed most on average.</figcaption>"
         )
         parts.append(
             _section(
@@ -768,13 +764,11 @@ def _rounded(v: Any) -> Any:
 
 def _page(parts: list[str], d: dict[str, Any], short: str, date: str) -> str:
     def kit(name: str) -> str:
-        # report.js mentions "</script>" in a comment; escape it so inlining
-        # doesn't close the surrounding <script> tag early.
-        return (KIT / name).read_text().replace("</script", "<\\/script")
+        return (KIT / name).read_text()
 
     data = json.dumps(_rounded(d), separators=(",", ":"))
     data = data.replace("</", "<\\/")
-    footer = f'Generated from commit <span class="mono">{html.escape(short)}</span>' + (
+    footer = f'Data from commit <span class="mono">{html.escape(short)}</span>' + (
         f" · {html.escape(date)}" if date else ""
     )
     description = (
