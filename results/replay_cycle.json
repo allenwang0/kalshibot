@@ -1,0 +1,84 @@
+{
+  "inputs": {
+    "fixture": "tests/fixtures/replay.json",
+    "fixture_note": "Recorded response shapes with fabricated prices. Not market data.",
+    "prices": "data/fed_funds_futures.example.csv",
+    "prices_note": "SYNTHETIC: made-up prices that show the file format. Not market data.",
+    "current_target_upper_bps": 400
+  },
+  "settings": {
+    "kelly_fraction": 0.2,
+    "shrinkage": 0.5,
+    "fee_rate": 0.07,
+    "max_position": 100.0,
+    "max_exposure": 300.0,
+    "paper_bankroll": 1000.0
+  },
+  "cycles": [
+    {
+      "ticker": "KXFED-26DEC-T3.50",
+      "strike": 3.5,
+      "meeting_date": "2026-12-09",
+      "model_p": 1.0,
+      "best_bid": 92,
+      "best_ask": 96,
+      "action": "buy 25"
+    },
+    {
+      "ticker": "KXFED-26DEC-T3.75",
+      "strike": 3.75,
+      "meeting_date": "2026-12-09",
+      "model_p": 0.6054545454545046,
+      "best_bid": 44,
+      "best_ask": 47,
+      "action": "buy 25"
+    },
+    {
+      "ticker": "KXFED-26DEC-T4.00",
+      "strike": 4.0,
+      "meeting_date": "2026-12-09",
+      "model_p": 0.0,
+      "best_bid": 2,
+      "best_ask": 4,
+      "action": "hold"
+    },
+    {
+      "ticker": "KXFED-27JAN-T3.50",
+      "strike": 3.5,
+      "meeting_date": "2027-01-27",
+      "model_p": 0.7611206611570162,
+      "best_bid": 60,
+      "best_ask": 64,
+      "action": "buy 25"
+    },
+    {
+      "ticker": "KXFED-27JAN-T3.75",
+      "strike": 3.75,
+      "meeting_date": "2027-01-27",
+      "model_p": 0.23887933884298382,
+      "best_bid": 18,
+      "best_ask": 21,
+      "action": "hold"
+    }
+  ],
+  "fills": [
+    {
+      "ticker": "KXFED-26DEC-T3.50",
+      "count": 25,
+      "price_cents": 96,
+      "fee_cents": 7
+    },
+    {
+      "ticker": "KXFED-26DEC-T3.75",
+      "count": 25,
+      "price_cents": 47,
+      "fee_cents": 44
+    },
+    {
+      "ticker": "KXFED-27JAN-T3.50",
+      "count": 25,
+      "price_cents": 64,
+      "fee_cents": 41
+    }
+  ]
+}
