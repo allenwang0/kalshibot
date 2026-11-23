@@ -1,0 +1,17 @@
+/* kalshibot report-local styles (loaded after report-kit). */
+.hero .figure{margin-top:32px;max-width:880px}
+.picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 16px;font-size:14px;color:var(--ink-2)}
+.picker select{font:inherit;font-size:15px;color:var(--ink-1);background:var(--surface-2);border:1px solid var(--hairline);border-radius:var(--radius-input);min-height:44px;padding:0 12px;max-width:100%}
+.picker .status{color:var(--ink-3)}
+.empty{color:var(--ink-2);font-size:var(--fs-lede);margin-top:24px}
+/* Local override for a kit bug: charts.js never draws narrower than 260 px, but at
+   320 px the figure's content box is 248 px, so the SVG scales down and tick text
+   drops below 11 px. Trim the figure padding on the narrowest screens so the plot
+   gets its full 260 px. */
+@media (max-width:359px){.figure{padding-left:13px;padding-right:13px}}
+/* Local override for a kit bug: the absolutely positioned Copy button sits on top of
+   the first line of a code block whenever that line is long. Start the code below it. */
+.codewrap pre{padding-top:44px}
+/* Environment values are prose, not numbers: let them wrap instead of scrolling. */
+.env td{white-space:normal;text-align:left}
+.nowrap{white-space:nowrap}
