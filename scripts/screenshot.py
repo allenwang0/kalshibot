@@ -34,7 +34,7 @@ def main() -> int:
                 page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.goto(url)
-                page.wait_for_selector(".js-plotly-plot, .empty")
+                page.wait_for_selector(".plot svg.chart, .empty")
                 overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
                 if overflow:
                     errors.append(f"horizontal scroll at {width}px {scheme}")

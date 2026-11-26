@@ -75,25 +75,54 @@ def test_metrics_score_the_horizon_row_not_the_last_minute(tmp_path):
     assert s["pnl_before_fees"] == pytest.approx(-1.00)
 
 
-def test_html_has_all_four_views_and_the_brier_numbers(tmp_path):
+def test_html_has_every_figure_and_the_scores(tmp_path):
     out = tmp_path / "report.html"
     assert evaluate.main(["--db", str(_db(tmp_path)), "--html", str(out)]) == 0
     page = out.read_text()
-    for title in evaluate.VIEW_TITLES.values():
-        assert title in page
-    assert f"Model Brier {_expected_brier(1):.3f} vs market {_expected_brier(2):.3f}" in page
-    assert "Synthetic data" not in page
+    for fig in evaluate.FIGURES:
+        assert f'id="c-{fig}"' in page and f'id="t-{fig}"' in page  # chart and table twin
+    assert f"{_expected_brier(1):.3f}" in page
+    assert f"vs {_expected_brier(2):.3f} for the market mid" in page
+    assert "Synthetic sample" not in page
+    # Self-contained: no Plotly and no external scripts, so the page stays small.
+    assert "plotly" not in page.lower()
+    assert 'src="http' not in page
 
 
-def test_synthetic_data_is_bannered_and_refused_for_the_card(tmp_path):
+def test_synthetic_label_sits_in_the_hero_and_next_to_the_pnl(tmp_path):
     db = _db(tmp_path, synthetic=True)
     out = tmp_path / "report.html"
     evaluate.main(["--db", str(db), "--html", str(out)])
-    # One disclosure at the top, not one per card.
-    assert out.read_text().count("Synthetic data:") == 1
+    page = out.read_text()
+    # A reader who only sees the hero, or only the P&L, still learns the data is fake.
+    hero = page[page.index('class="hero') : page.index('aria-label="Key results"')]
+    assert '<span class="key">Synthetic sample' in hero
+    pnl = page[page.index('id="pnl"') : page.index('id="edges"')]
+    assert "Synthetic sample" in pnl
+    assert "on the synthetic sample" in pnl
     with pytest.raises(SystemExit) as e:
         evaluate.main(["--db", str(db), "--card", str(tmp_path / "card.json")])
     assert e.value.code != 0
+
+
+def test_reliability_bins_carry_counts_and_a_wilson_interval():
+    rows = evaluate.reliability([0.1, 0.15, 0.9, 0.95], [0, 1, 1, 1])
+    assert [r["count"] for r in rows] == [2, 2]
+    low, high = rows
+    # 1 of 2 YES: the interval must be wide enough to include both 0.1 and 0.9.
+    assert low["ci_lo"] < 0.1 and low["ci_hi"] > 0.9
+    assert high["freq"] == 1 and high["ci_hi"] == 1 and high["ci_lo"] < 0.5
+
+
+def test_drawdown_treats_simultaneous_settlements_as_one_step(tmp_path):
+    # Both fixture fills settle at the same instant: A wins 3.83, C loses 5.18.
+    # Per-fill ordering would invent a 5.18 drop from a 3.83 peak; per settlement
+    # the log just goes 0 -> -1.35.
+    conn = evaluate.load(_db(tmp_path))
+    r = evaluate.compute(conn)
+    d = evaluate.report_data(conn, r, evaluate.summary(r))
+    assert d["pnl"]["settlements"] == 1
+    assert d["pnl"]["drawdown"] == pytest.approx(1.35)
 
 
 def test_card_validates_and_matches_the_report(tmp_path):

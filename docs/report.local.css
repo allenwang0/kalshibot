@@ -1,0 +1,9 @@
+/* kalshibot report-local styles (loaded after report-kit). */
+.hero .figure{margin-top:32px;max-width:880px}
+.picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 16px;font-size:14px;color:var(--ink-2)}
+.picker select{font:inherit;font-size:15px;color:var(--ink-1);background:var(--surface-2);border:1px solid var(--hairline);border-radius:var(--radius-input);min-height:44px;padding:0 12px;max-width:100%}
+.picker .status{color:var(--ink-3)}
+.empty{color:var(--ink-2);font-size:var(--fs-lede);margin-top:24px}
+/* Environment values are prose, not numbers: let them wrap instead of scrolling. */
+.env td{white-space:normal;text-align:left}
+.nowrap{white-space:nowrap}

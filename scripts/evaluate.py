@@ -16,6 +16,9 @@ import datetime
 import html
 import json
 import math
+import os
+import platform
+import random
 import shlex
 import sqlite3
 import subprocess
@@ -23,24 +26,13 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-BINS = 10
+BINS = 5
 EPS = 1e-6
-# Okabe-Ito, colorblind safe. Color is never the only cue: marker shape and
-# line dash also differ.
-MODEL_COLOR = "#0072B2"
-MARKET_COLOR = "#D55E00"
-NEUTRAL_COLOR = "#999999"
-VIEW_TITLES = {
-    "a": "Calibration: model vs market",
-    "b": "Model and market over time",
-    "c": "Paper P&L",
-    "d": "Edge vs realized return",
-}
+FIGURES = ("delta", "cal", "pnl", "edge", "ts")  # chart ids, in page order
 
 
 @dataclass
@@ -79,20 +71,35 @@ def log_loss(ps: list[float], ys: list[int]) -> float:
     return total / len(ps)
 
 
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95 % Wilson score interval for k successes out of n."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
 def reliability(ps: list[float], ys: list[int]) -> list[dict[str, float]]:
-    """Ten equal-width bins; empty bins are left out."""
+    """Equal-width bins with a 95 % Wilson interval each; empty bins are left out."""
     rows = []
     for b in range(BINS):
         lo, hi = b / BINS, (b + 1) / BINS
         idx = [i for i, p in enumerate(ps) if lo <= p < hi or (b == BINS - 1 and p == 1.0)]
         if idx:
+            yes = sum(ys[i] for i in idx)
+            ci_lo, ci_hi = wilson(yes, len(idx))
             rows.append(
                 {
                     "lo": lo,
                     "hi": hi,
                     "count": len(idx),
+                    "yes": yes,
                     "mean_p": sum(ps[i] for i in idx) / len(idx),
-                    "freq": sum(ys[i] for i in idx) / len(idx),
+                    "freq": yes / len(idx),
+                    "ci_lo": ci_lo,
+                    "ci_hi": ci_hi,
                 }
             )
     return rows
@@ -207,473 +214,580 @@ def brier_takeaway(s: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------- report
+#
+# The page is one self-contained HTML file: report-kit v1 (docs/kit/, vendored,
+# never edited) is inlined, the data is inlined as JSON, and the charts are
+# drawn by the kit's SVG helpers. Every number on the page comes from the log.
+
+DOCS = ROOT / "docs"
+KIT = DOCS / "kit"
+BOOTSTRAP_REPS = 2000
+BOOTSTRAP_SEED = 1
+REPO_URL = "https://github.com/allenwang0/kalshibot"
 
 
-def _layout(fig: Any, x_title: str, y_title: str, **extra: Any) -> None:
-    layout: dict[str, Any] = {
-        "margin": {"l": 56, "r": 16, "t": 16, "b": 48},
-        "height": 380,
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(0,0,0,0)",
-        "legend": {"orientation": "h", "y": -0.22},
-        "hoverlabel": {"namelength": -1},
-        "xaxis_title": x_title,
-        "yaxis_title": y_title,
-    }
-    layout.update(extra)
-    fig.update_layout(**layout)
-
-
-def fig_reliability(s: dict[str, Any]) -> Any:
-    import plotly.graph_objects as go
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=[0, 1],
-            y=[0, 1],
-            mode="lines",
-            name="Perfect calibration",
-            line={"color": NEUTRAL_COLOR, "dash": "dot"},
-            hoverinfo="skip",
+def bootstrap_delta(
+    ps: list[float], ms: list[float], ys: list[int], score: Any
+) -> tuple[float, float, float]:
+    """score(model) - score(market) and a 95 % percentile interval from
+    resampling contracts with replacement (fixed seed)."""
+    rng = random.Random(BOOTSTRAP_SEED)
+    n = len(ys)
+    deltas = []
+    for _ in range(BOOTSTRAP_REPS):
+        idx = [rng.randrange(n) for _ in range(n)]
+        deltas.append(
+            score([ps[i] for i in idx], [ys[i] for i in idx])
+            - score([ms[i] for i in idx], [ys[i] for i in idx])
         )
+    deltas.sort()
+    return (
+        score(ps, ys) - score(ms, ys),
+        deltas[int(0.025 * BOOTSTRAP_REPS)],
+        deltas[int(0.975 * BOOTSTRAP_REPS) - 1],
     )
-    for name, rows, color, symbol in (
-        ("Model", s["model_reliability"], MODEL_COLOR, "circle"),
-        ("Market mid", s["market_reliability"], MARKET_COLOR, "diamond"),
-    ):
-        fig.add_trace(
-            go.Scatter(
-                x=[r["mean_p"] for r in rows],
-                y=[r["freq"] for r in rows],
-                mode="markers",
-                name=name,
-                marker={
-                    "color": color,
-                    "symbol": symbol,
-                    "line": {"width": 1, "color": "white"},
-                    "size": [8 + 22 * math.sqrt(r["count"] / s["n"]) for r in rows],
-                },
-                customdata=[[r["lo"], r["hi"], r["count"]] for r in rows],
-                hovertemplate=(
-                    f"{name}<br>bin %{{customdata[0]:.1f}} to %{{customdata[1]:.1f}}"
-                    "<br>n = %{customdata[2]}<br>mean predicted %{x:.3f}"
-                    "<br>observed %{y:.3f}<extra></extra>"
-                ),
-            )
+
+
+def pnl_by_settlement(r: Results) -> list[tuple[str, float, float]]:
+    """Cumulative P&L at each settlement time. Fills that settle together are
+    one step: their order inside a settlement is arbitrary, so a drawdown
+    measured between them would not be real."""
+    out: dict[str, tuple[float, float]] = {}
+    for ts, before, after in r.pnl:
+        out[ts] = (before, after)
+    return [(ts, b, a) for ts, (b, a) in sorted(out.items())]
+
+
+def edge_bins(edges: list[tuple[float, float]]) -> list[dict[str, float]]:
+    """Fills grouped by model edge; mean realized P&L with a normal 95 % CI."""
+    xs = [e[0] for e in edges]
+    lo, hi = math.floor(min(xs)), math.ceil(max(xs))
+    width = max(1, math.ceil((hi - lo) / 8))
+    rows = []
+    for start in range(lo, hi + 1, width):
+        bucket = [(x, y) for x, y in edges if start <= x < start + width]
+        if not bucket:
+            continue
+        ys = [y for _, y in bucket]
+        mean = sum(ys) / len(ys)
+        sd = math.sqrt(sum((y - mean) ** 2 for y in ys) / (len(ys) - 1)) if len(ys) > 1 else 0.0
+        half = 1.96 * sd / math.sqrt(len(ys)) if len(ys) > 1 else 0.0
+        rows.append(
+            {
+                "lo": start,
+                "hi": start + width,
+                "n": len(ys),
+                "edge": sum(x for x, _ in bucket) / len(bucket),
+                "mean": mean,
+                "ci_lo": mean - half,
+                "ci_hi": mean + half,
+            }
         )
-    _layout(
-        fig,
-        "Mean predicted probability",
-        "Observed frequency",
-        xaxis_range=[-0.03, 1.03],
-        yaxis_range=[-0.05, 1.05],
-    )
-    return fig
+    return rows
 
 
-def fig_timeseries(conn: sqlite3.Connection) -> tuple[Any, int]:
-    import plotly.graph_objects as go
-
-    eastern = ZoneInfo("America/New_York")
+def contracts(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Per-contract series for the explorer, rounded so the page is small and
+    byte-identical across platforms (libm differs in the last bit)."""
     settled = dict(conn.execute("SELECT ticker, result FROM settlements").fetchall())
     tickers = [
-        r[0]
-        for r in conn.execute(
+        row[0]
+        for row in conn.execute(
             "SELECT ticker FROM cycles WHERE mid IS NOT NULL GROUP BY ticker "
             "ORDER BY MIN(meeting_date), ticker"
         )
     ]
-    fig = go.Figure()
-    buttons = []
-    per = 5  # traces per contract
-    for i, ticker in enumerate(tickers):
+    out = []
+    for ticker in tickers:
         rows = conn.execute(
             "SELECT ts, model_p, mid, best_bid, best_ask, meeting_date FROM cycles "
             "WHERE ticker = ? AND mid IS NOT NULL ORDER BY ts",
             (ticker,),
         ).fetchall()
-        ts = [r[0] for r in rows]
-        visible = i == 0
-        fig.add_trace(
-            go.Scatter(
-                x=ts,
-                y=[r[4] / 100 for r in rows],
-                mode="lines",
-                line={"width": 0},
-                showlegend=False,
-                hoverinfo="skip",
-                visible=visible,
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=ts,
-                y=[r[3] / 100 for r in rows],
-                mode="lines",
-                line={"width": 0},
-                fill="tonexty",
-                name="Bid-ask",
-                fillcolor="rgba(213,94,0,0.15)",
-                hoverinfo="skip",
-                visible=visible,
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=ts,
-                y=[r[2] for r in rows],
-                mode="lines",
-                name="Market mid",
-                line={"color": MARKET_COLOR, "dash": "dash"},
-                visible=visible,
-                hovertemplate="%{x}<br>mid %{y:.3f}<extra></extra>",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=ts,
-                y=[r[1] for r in rows],
-                mode="lines",
-                name="Model",
-                line={"color": MODEL_COLOR},
-                visible=visible,
-                hovertemplate="%{x}<br>model %{y:.3f}<extra></extra>",
-            )
-        )
-        meeting = rows[-1][5]
-        decision = (
-            datetime.datetime.fromisoformat(meeting + "T14:00")
-            .replace(tzinfo=eastern)
-            .astimezone(datetime.UTC)
-            .isoformat()
-            if meeting
-            else ts[-1]
-        )
-        result = settled.get(ticker)
-        if result:
-            end = 1.0 if result == "yes" else 0.0
-            line = {
-                "x": [decision] * 3,
-                "y": [0, 1, end],
-                "mode": "lines+markers+text",
-                "marker": {"symbol": "star", "size": [0, 0, 14], "color": "#009E73"},
-                "text": ["", "", f"settled {result.upper()}"],
-            }
-        else:
-            line = {"x": [decision] * 2, "y": [0, 1], "mode": "lines"}
-        fig.add_trace(
-            go.Scatter(
-                **line,
-                line={"color": NEUTRAL_COLOR, "dash": "dot"},
-                textposition="middle left",
-                name="FOMC decision",
-                visible=visible,
-                hovertemplate="FOMC decision %{x}<extra></extra>",
-            )
-        )
-        vis = [False] * (per * len(tickers))
-        vis[per * i : per * i + per] = [True] * per
-        buttons.append({"label": ticker, "method": "update", "args": [{"visible": vis}]})
-    _layout(fig, "Time (UTC)", "Probability", yaxis_range=[-0.02, 1.08])
-    if buttons:
-        fig.update_layout(
-            updatemenus=[
-                {
-                    "buttons": buttons,
-                    "x": 0,
-                    "y": 1.18,
-                    "xanchor": "left",
-                    "direction": "down",
-                    "showactive": True,
-                }
-            ],
-            margin={"t": 56},
-        )
-    return fig, len(tickers)
-
-
-def fig_pnl(r: Results) -> tuple[Any, str]:
-    import plotly.graph_objects as go
-
-    ts = [p[0] for p in r.pnl]
-    before = [p[1] for p in r.pnl]
-    after = [p[2] for p in r.pnl]
-    dd, at = max_drawdown(after)
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=ts,
-            y=after,
-            mode="lines",
-            line_shape="hv",
-            name="After fees",
-            line={"color": MODEL_COLOR},
-            hovertemplate="%{x}<br>$%{y:.2f}<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=ts,
-            y=before,
-            mode="lines",
-            line_shape="hv",
-            name="Before fees",
-            line={"color": MARKET_COLOR, "dash": "dash"},
-            visible=False,
-            hovertemplate="%{x}<br>$%{y:.2f}<extra></extra>",
-        )
-    )
-    if dd > 0:
-        fig.add_annotation(
-            x=ts[at],
-            y=after[at],
-            text=f"max drawdown ${dd:.2f}",
-            showarrow=True,
-            arrowhead=2,
-            ay=40,
-        )
-    fig.update_layout(
-        updatemenus=[
+        gaps = [abs(r[1] - r[2]) for r in rows if r[1] is not None]
+        out.append(
             {
-                "type": "buttons",
-                "direction": "right",
-                "x": 0,
-                "y": 1.18,
-                "xanchor": "left",
-                "buttons": [
-                    {
-                        "label": "After fees",
-                        "method": "update",
-                        "args": [{"visible": [True, False]}],
-                    },
-                    {
-                        "label": "Before fees",
-                        "method": "update",
-                        "args": [{"visible": [False, True]}],
-                    },
-                ],
+                "ticker": ticker,
+                "meeting": rows[-1][5],
+                "result": settled.get(ticker),
+                "t": [int(_parse_ts(r[0]).timestamp()) for r in rows],
+                "model": [None if r[1] is None else round(r[1], 3) for r in rows],
+                "mid": [round(r[2], 3) for r in rows],
+                "bid": [None if r[3] is None else r[3] for r in rows],
+                "ask": [None if r[4] is None else r[4] for r in rows],
+                "gap": sum(gaps) / len(gaps) if gaps else 0.0,
             }
-        ]
-    )
-    _layout(fig, "Settlement date (UTC)", "Cumulative P&L (USD)", margin={"t": 56})
-    takeaway = (
-        f"Paper P&L after fees ${after[-1]:.2f} (before fees ${before[-1]:.2f}) "
-        f"over {len(after)} settled fills; max drawdown ${dd:.2f}"
-    )
-    return fig, takeaway
-
-
-def fig_edges(r: Results) -> tuple[Any, str]:
-    import plotly.graph_objects as go
-
-    xs = [e[0] for e in r.edges]
-    ys = [e[1] for e in r.edges]
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=xs,
-            y=ys,
-            mode="markers",
-            name="Fill",
-            marker={"color": MODEL_COLOR, "opacity": 0.45, "symbol": "circle"},
-            hovertemplate="edge %{x:.1f}c<br>realized %{y:.1f}c<extra></extra>",
         )
-    )
-    lo, hi = math.floor(min(xs)), math.ceil(max(xs))
-    width = max(1, math.ceil((hi - lo) / 8))
-    bx, by = [], []
-    for start in range(lo, hi + 1, width):
-        bucket = [y for x, y in zip(xs, ys, strict=True) if start <= x < start + width]
-        if bucket:
-            bx.append(start + width / 2)
-            by.append(sum(bucket) / len(bucket))
-    fig.add_trace(
-        go.Scatter(
-            x=bx,
-            y=by,
-            mode="lines+markers",
-            name="Binned mean",
-            line={"color": MARKET_COLOR, "dash": "dash"},
-            marker={"symbol": "square"},
-            hovertemplate="edge bin %{x:.1f}c<br>mean %{y:.1f}c<extra></extra>",
-        )
-    )
-    _layout(fig, "Model edge after fees (cents)", "Realized P&L per contract (cents)")
-    mean_edge = sum(xs) / len(xs)
-    mean_real = sum(ys) / len(ys)
-    takeaway = (
-        f"Mean edge after fees {mean_edge:.1f}c per contract; "
-        f"mean realized {mean_real:.1f}c over {len(xs)} fills"
-    )
-    return fig, takeaway
+    return out
 
 
-PAGE = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kalshi Bot evaluation · Allen Wang</title>
-<script>
-try {{
-  var t = localStorage.getItem("theme");
-  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
-}} catch (e) {{}}
-</script>
-<style>
-:root {{ --bg: #fbfbf9; --fg: #111111; --muted: #5f5f63; --accent: #d70015; --card: #f2f2ef;
-         --grid: #dddddd; color-scheme: light; }}
-@media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{ --bg: #0b0b0b; --fg: #f2f2ef; --muted: #a1a1a6;
-           --accent: #ff5a4f; --card: #161616; --grid: #3a3a3a; color-scheme: dark; }}
-}}
-:root[data-theme="dark"] {{ --bg: #0b0b0b; --fg: #f2f2ef; --muted: #a1a1a6; --accent: #ff5a4f;
-         --card: #161616; --grid: #3a3a3a; color-scheme: dark; }}
-* {{ box-sizing: border-box; }}
-body {{ margin: 0; background: var(--bg); color: var(--fg);
-        font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
-              Helvetica, Arial, sans-serif; }}
-main {{ max-width: 960px; margin: 0 auto; padding: 0 16px 48px; }}
-.site-nav {{ display: flex; justify-content: space-between; gap: 16px; padding: 16px 0 24px;
-             font-size: 14px; }}
-.site-nav a {{ color: var(--muted); text-decoration: none; }}
-.site-nav a:hover {{ color: var(--fg); }}
-h1 {{ font-size: 1.5rem; margin: 0 0 4px; }}
-h2 {{ font-size: 1.15rem; margin: 0 0 4px; }}
-.synthetic {{ color: var(--muted); font-size: 14px; margin: 0 0 4px; }}
-.sub {{ color: var(--muted); margin: 0 0 24px; }}
-section {{ background: var(--card); border-radius: 8px; padding: 16px; margin: 0 0 20px; }}
-.takeaway {{ margin: 0 0 8px; }}
-.question {{ color: var(--muted); margin: 0 0 8px; font-size: 0.9rem; }}
-.note {{ color: var(--muted); margin: 8px 0 0; font-size: 0.85rem; }}
-.empty {{ color: var(--muted); padding: 32px 0; text-align: center; }}
-code {{ font-size: 0.9em; }}
-</style>
-</head>
-<body>
-<main>
-<nav class="site-nav" aria-label="Site"><a href="https://allenwang0.github.io/">← Allen Wang</a><a href="https://github.com/allenwang0/kalshibot">Source</a></nav>
-<h1>Kalshi Bot evaluation</h1>
-{synthetic}<p class="sub">{subtitle}</p>
-{sections}
-</main>
-<script>
-(function () {{
-  var css = getComputedStyle(document.documentElement);
-  var fg = css.getPropertyValue("--fg").trim(), grid = css.getPropertyValue("--grid").trim();
-  var bg = css.getPropertyValue("--bg").trim(), card = css.getPropertyValue("--card").trim();
-  document.querySelectorAll(".js-plotly-plot").forEach(function (el) {{
-    Plotly.relayout(el, {{"font.color": fg, "xaxis.gridcolor": grid, "yaxis.gridcolor": grid,
-      "xaxis.zerolinecolor": grid, "yaxis.zerolinecolor": grid,
-      "hoverlabel.bgcolor": bg, "hoverlabel.font.color": fg,
-      "updatemenus[0].bgcolor": card, "updatemenus[0].bordercolor": grid,
-      "updatemenus[0].font.color": fg}});
-    if (el.id === "reliability") Plotly.restyle(el, {{"marker.line.color": card}}, [1, 2]);
-  }});
-}})();
-</script>
-</body>
-</html>
-"""
+def _git(*args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out or None
 
 
-def _section(key: str, question: str, takeaway: str, body: str) -> str:
-    return (
-        f'<section id="view-{key}"><h2>{VIEW_TITLES[key]}</h2>'
-        f'<p class="question">{html.escape(question)}</p>'
-        f'<p class="takeaway">{html.escape(takeaway)}</p>{body}</section>'
-    )
+def _cents(v: float) -> str:
+    return f"{v:.1f} ¢"
 
 
-def render_html(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> str:
-    import plotly.io as pio
+def _usd(v: float) -> str:
+    return f"−${-v:,.2f}" if v < 0 else f"${v:,.2f}"
 
-    first = {"done": False}
 
-    def plot(fig: Any, div_id: str) -> str:
-        include = not first["done"]
-        first["done"] = True
-        out: str = pio.to_html(
-            fig,
-            full_html=False,
-            include_plotlyjs=include,
-            div_id=div_id,
-            config={"responsive": True, "displaylogo": False},
-        )
-        return out
+def _signed(v: float) -> str:
+    return f"{v:+.3f}".replace("-", "−")
 
-    since = (r.first_cycle or "")[:10]
-    empty = f'<p class="empty">No settled contracts yet, {r.cycles} cycles logged since {since}</p>'
-    sections = []
-    ts_fig, n_contracts = fig_timeseries(conn)
-    if s["n"]:
-        body_a = plot(fig_reliability(s), "reliability") + (
-            '<p class="note">Marker size grows with the number of contracts in each bin; '
-            "hover a marker for its count.</p>"
-        )
-        take_a = brier_takeaway(s)
-    else:
-        body_a, take_a = empty, "No contracts scored yet"
-    sections.append(
-        _section(
-            "a",
-            "When the model says 30%, does it happen 30% of the time?",
-            take_a,
-            body_a,
-        )
-    )
-    sections.append(
-        _section(
-            "b",
-            "Where did the model and market disagree, and who was right?",
-            f"{n_contracts} contracts logged; pick one from the menu",
-            plot(ts_fig, "timeseries") if n_contracts else empty,
-        )
-    )
+
+def _verdict(lo: float, hi: float) -> str:
+    if lo > 0:
+        return "market"
+    if hi < 0:
+        return "model"
+    return "tie"
+
+
+def report_data(conn: sqlite3.Connection, r: Results, s: dict[str, Any]) -> dict[str, Any]:
+    """Everything the page shows, computed from the log."""
+    meta = dict(conn.execute("SELECT key, value FROM meta").fetchall()) if _has_meta(conn) else {}
+    d: dict[str, Any] = {
+        "n": s["n"],
+        "synthetic": r.synthetic,
+        "seed": meta.get("seed"),
+        "cycles": r.cycles,
+        "since": (r.first_cycle or "")[:10],
+    }
+    if not s["n"]:
+        return d
+    ps = [p.model_p for p in r.predictions]
+    ms = [p.mid for p in r.predictions]
+    ys = [p.outcome for p in r.predictions]
+    d["delta_log_loss"] = bootstrap_delta(ps, ms, ys, log_loss)
+    d["delta_brier"] = bootstrap_delta(ps, ms, ys, brier)
+    for key in ("model_reliability", "market_reliability"):
+        d[key] = [dict(row) for row in s[key]]
     if r.pnl:
-        fig_c, take_c = fig_pnl(r)
-        body_c = plot(fig_c, "pnl")
-    else:
-        body_c, take_c = empty, "No settled paper fills yet"
-    sections.append(_section("c", "Does the strategy make money after fees?", take_c, body_c))
+        steps = pnl_by_settlement(r)
+        dd, at = max_drawdown([0.0] + [a for _, _, a in steps])
+        d["pnl"] = {
+            "start": r.first_cycle,
+            "steps": [[ts, round(b, 2), round(a, 2)] for ts, b, a in steps],
+            "after": s["pnl_after_fees"],
+            "before": s["pnl_before_fees"],
+            "fills": s["settled_fills"],
+            "drawdown": dd,
+            "drawdown_at": steps[at - 1][0][:10] if dd > 0 else None,
+            "settlements": len(steps),
+        }
     if r.edges:
-        fig_d, take_d = fig_edges(r)
-        body_d = plot(fig_d, "edges")
+        d["edges"] = {
+            "bins": edge_bins(r.edges),
+            "mean_edge": sum(e[0] for e in r.edges) / len(r.edges),
+            "mean_real": sum(e[1] for e in r.edges) / len(r.edges),
+            "n": len(r.edges),
+        }
+    return d
+
+
+def _figure(fid: str, title: str, sub: str, legend: str = "", caption: str = "") -> str:
+    return (
+        f'<figure class="figure" aria-labelledby="f-{fid}"><div class="fig-head"><div>'
+        f'<h3 id="f-{fid}">{html.escape(title)}</h3><p class="sub">{html.escape(sub)}</p></div>'
+        '<div class="seg" role="radiogroup" aria-label="View" data-view-toggle>'
+        '<button role="radio" aria-checked="true" data-value="chart">Chart</button>'
+        '<button role="radio" aria-checked="false" data-value="table">Table</button></div></div>'
+        f'{legend}<div id="c-{fid}"></div><div id="t-{fid}" hidden></div>'
+        + (f"<figcaption>{caption}</figcaption>" if caption else "")
+        + "</figure>"
+    )
+
+
+def _legend(*items: tuple[str, str]) -> str:
+    keys = {
+        "dot": '<circle cx="5" cy="5" r="4" fill="var(--ink-3)"/>',
+        "ring": '<circle cx="5" cy="5" r="4" fill="none" stroke="var(--ink-3)" stroke-width="2"/>',
+        "line": '<line x1="0" y1="5" x2="10" y2="5" stroke="var(--ink-3)" stroke-width="2"/>',
+    }
+    spans = "".join(
+        f'<span><svg width="10" height="10">{keys[k]}</svg>{html.escape(t)}</span>'
+        for k, t in items
+    )
+    return f'<div class="legend" aria-hidden="true">{spans}</div>'
+
+
+def _section(sid: str, eyebrow: str, h2: str, lede: str, body: str) -> str:
+    return (
+        f'<section class="s wrap" id="{sid}" aria-labelledby="h-{sid}">'
+        f'<p class="eyebrow">{html.escape(eyebrow)}</p><h2 id="h-{sid}">{html.escape(h2)}</h2>'
+        f'<p class="lede">{html.escape(lede)}</p>{body}</section>'
+    )
+
+
+def _caveat(lead: str, text: str) -> str:
+    return f'<p class="caveat" role="note"><b>{html.escape(lead)}</b> {html.escape(text)}</p>'
+
+
+def _card(span: int, label: str, metric: str, unit: str, cmp: str, foot: str) -> str:
+    u = f' <span class="unit">{html.escape(unit)}</span>' if unit else ""
+    return (
+        f'<div class="card span-{span}"><span class="label">{html.escape(label)}</span>'
+        f'<span class="metric num">{html.escape(metric)}{u}</span>'
+        f'<span class="cmp">{html.escape(cmp)}</span><span class="foot">{foot}</span></div>'
+    )
+
+
+def render_html(
+    conn: sqlite3.Connection, r: Results, s: dict[str, Any], horizon_days: float = 7.0
+) -> str:
+    d = report_data(conn, r, s)
+    hz = f"{horizon_days:g}"
+    synth = r.synthetic
+    seed = d["seed"]
+    synth_label = (
+        f"Synthetic sample (seed {seed}), not real results"
+        if seed
+        else ("Synthetic sample, not real results")
+    )
+    sha = os.environ.get("GITHUB_SHA") or _git("rev-parse", "HEAD")
+    short = sha[:7] if sha else "unknown"
+    date = _git("log", "-1", "--format=%cs") or ""
+    parts: list[str] = []
+    n = s["n"]
+
+    # ---- hero
+    if n:
+        verdicts = {_verdict(*d["delta_log_loss"][1:]), _verdict(*d["delta_brier"][1:])}
+        prefix = "On a synthetic sample of" if synth else "On"
+        if verdicts == {"tie"}:
+            h1 = f"{prefix} {n} contracts, model and market score within noise of each other"
+        elif verdicts <= {"model", "tie"}:
+            h1 = f"{prefix} {n} contracts, the model out-forecasts the market mid"
+        elif verdicts <= {"market", "tie"}:
+            h1 = f"{prefix} {n} contracts, the market mid out-forecasts the model"
+        else:
+            h1 = f"{prefix} {n} contracts, the two scores disagree on model versus market"
     else:
-        body_d, take_d = empty, "No settled paper fills yet"
-    sections.append(_section("d", "Do bigger edges earn more?", take_d, body_d))
-    if s["n"]:
-        subtitle = (
-            f"{s['n']} settled Kalshi Fed-rate contracts, {s['first_settled']} to "
-            f"{s['last_settled']}. Model log loss {s['model_log_loss']:.3f}, "
-            f"market {s['market_log_loss']:.3f}."
+        h1 = "No contracts have settled yet, so nothing is scored"
+    lede = (
+        "kalshibot turns Fed Funds futures into a probability for each Kalshi Fed-rate "
+        "contract. This page scores those probabilities against the market mid at least "
+        f"{hz} days before each contract settled, then follows the paper trades."
+    )
+    conds = []
+    if synth:
+        conds.append(f'<span class="key">{html.escape(synth_label)}</span>')
+    if n:
+        conds += [
+            f"<span>{n} settled contracts, {s['first_settled']} to {s['last_settled']}</span>",
+            f"<span>Scored ≥ {hz} days before settlement</span>",
+            "<span>Paper trading only</span>",
+        ]
+    hero = (
+        '<section class="hero wrap" aria-labelledby="h1"><p class="eyebrow">'
+        "Forecast evaluation · Python</p>"
+        f'<h1 id="h1">{html.escape(h1)}</h1><p class="lede">{html.escape(lede)}</p>'
+        f'<p class="conditions">{"".join(conds)}</p>'
+    )
+    if n:
+        dl, db = d["delta_log_loss"], d["delta_brier"]
+        hero += _figure(
+            "delta",
+            "Both 95 % intervals cross zero"
+            if {_verdict(*dl[1:]), _verdict(*db[1:])} == {"tie"}
+            else "Score differences, model minus market",
+            f"Model − market · lower favors the model · n = {n} contracts",
+            caption="Each dot is the model's score minus the market mid's score on the same "
+            f"{n} contracts (log loss {_signed(dl[0])}, Brier {_signed(db[0])}). Lines are 95 % "
+            f"intervals from {BOOTSTRAP_REPS:,} bootstrap resamples of contracts. An interval "
+            "that crosses zero means this sample can't tell the two apart.",
         )
-        log_loss_favors_model = s["model_log_loss"] < s["market_log_loss"]
-        brier_favors_model = s["model_brier"] < s["market_brier"]
-        if log_loss_favors_model != brier_favors_model:
-            subtitle += (
-                f" The two scores disagree: log loss favors the "
-                f"{'model' if log_loss_favors_model else 'market'}, while Brier "
-                f"({s['model_brier']:.3f} vs {s['market_brier']:.3f}) favors the "
-                f"{'model' if brier_favors_model else 'market'}; with {s['n']} contracts "
-                "neither difference is meaningful."
-            )
     else:
-        subtitle = f"{r.cycles} cycles logged since {since}."
-    synthetic = (
-        '<p class="synthetic">Synthetic data: generated by scripts/make_sample.py. '
-        "Not real results.</p>\n"
-        if r.synthetic
-        else ""
+        since = d["since"]
+        hero += (
+            f'<p class="empty">No settled contracts yet, {r.cycles} cycles logged since {since}</p>'
+        )
+    parts.append(hero + "</section>")
+    if not n:
+        return _page(parts, d, short, date)
+
+    # ---- bento
+    foot_n = f"n = {n} contracts · lower is better"
+    cards = [
+        _card(
+            4,
+            "Log loss, model",
+            f"{s['model_log_loss']:.3f}",
+            "",
+            f"vs {s['market_log_loss']:.3f} for the market mid",
+            html.escape(foot_n),
+        ),
+        _card(
+            4,
+            "Brier score, model",
+            f"{s['model_brier']:.3f}",
+            "",
+            f"vs {s['market_brier']:.3f} for the market mid",
+            html.escape(foot_n),
+        ),
+    ]
+    if "pnl" in d:
+        p = d["pnl"]
+        foot = f"{p['fills']} settled fills"
+        if synth:
+            foot = f"<b>{html.escape(synth_label)}</b> · {foot}"
+        cards.append(
+            _card(
+                4,
+                "Paper P&L, after fees",
+                _usd(p["after"]),
+                "",
+                f"{_usd(p['before'])} before {_usd(p['before'] - p['after'])} in fees",
+                foot,
+            )
+        )
+    parts.append(
+        '<section class="wrap" aria-label="Key results"><div class="bento">'
+        + "".join(cards)
+        + "</div></section>"
     )
-    page = PAGE.format(
-        synthetic=synthetic,
-        subtitle=html.escape(subtitle),
-        sections="\n".join(sections),
+
+    # ---- calibration
+    rel = d["model_reliability"] + d["market_reliability"]
+    inside = sum(1 for b in rel if b["ci_lo"] <= b["mean_p"] <= b["ci_hi"])
+    counts = [b["count"] for b in rel]
+    widths = [b["ci_hi"] - b["ci_lo"] for b in rel]
+    parts.append(
+        _section(
+            "calibration",
+            "Is each forecaster calibrated?",
+            f"With {n} contracts, the calibration diagram is mostly noise",
+            f"In {inside} of {len(rel)} bins across both forecasters, the mean forecast falls "
+            "inside the 95 % interval of what happened. The intervals are too wide to rank the "
+            "two forecasters; the score differences above are the better test.",
+            _figure(
+                "cal",
+                "Observed YES rate per forecast bin",
+                f"{BINS} equal-width bins · n per bin shown as model / market · 95 % Wilson CI",
+                _legend(
+                    ("dot", "Observed YES rate"),
+                    ("ring", "Mean forecast"),
+                    ("line", "95 % interval"),
+                ),
+                caption="Contracts are grouped by each forecaster's own probability, so a bin "
+                "can hold different contracts for the model and the market. A calibrated "
+                "forecaster's ring sits inside its line.",
+            )
+            + _caveat(
+                "Small n.",
+                f"Each bin holds {min(counts)}–{max(counts)} contracts, so its 95 % interval is "
+                f"{min(widths):.2f}–{max(widths):.2f} wide. Read differences between bins as "
+                "noise.",
+            ),
+        )
     )
-    if not first["done"]:
-        page = page.replace('document.querySelectorAll(".js-plotly-plot")', "[]")
+
+    # ---- P&L
+    if "pnl" in d:
+        p = d["pnl"]
+        sign = "made" if p["after"] >= 0 else "lost"
+        h2 = f"Paper trading {sign} {_usd(abs(p['after']))} after fees over {p['fills']} fills"
+        if synth:
+            h2 += " on the synthetic sample"
+        lede_c = (
+            f"Fees took {_usd(p['before'] - p['after'])} of the {_usd(p['before'])} earned before "
+            f"fees. The worst fall from a peak was {_usd(p['drawdown'])}"
+            + (f", reached at the {p['drawdown_at']} settlement." if p["drawdown_at"] else ".")
+        )
+        body = _figure(
+            "pnl",
+            "Cumulative P&L after and before fees",
+            f"USD · {p['fills']} fills over {p['settlements']} settlement dates",
+            caption="Cumulative P&L at each settlement date, starting at $0 on the first "
+            "logged cycle. Fills that settle at the same time count as one step. The dashed line "
+            "adds the fees back.",
+        )
+        if synth:
+            body += _caveat(
+                synth_label + ".",
+                "make_sample.py adds noise to a known true probability and logs a fill only "
+                "when the model's edge passes a threshold, so this P&L is set by the generator. "
+                "It shows the accounting works, not that the strategy makes money.",
+            )
+        parts.append(_section("pnl", "Does the strategy make money after fees?", h2, lede_c, body))
+
+    # ---- edges
+    if "edges" in d:
+        e = d["edges"]
+        lede_d = (
+            f"Mean edge after fees was {_cents(e['mean_edge'])} per contract; mean realized P&L "
+            f"was {_cents(e['mean_real'])} over {e['n']} fills. Each contract pays 100 ¢ or 0, "
+            "so single fills swing widely and only bin means carry signal."
+        )
+        any_pos = any(b["ci_lo"] > 0 for b in e["bins"])
+        h2 = (
+            "Realized returns are too noisy at this sample size to confirm the edge"
+            if not any_pos
+            else "Some edge bins earn a positive return beyond noise"
+        )
+        body = _figure(
+            "edge",
+            "Mean realized P&L by model edge bin",
+            f"Cents per contract · {e['n']} fills · 95 % CI of the bin mean",
+            _legend(
+                ("dot", "Mean realized"),
+                ("ring", "Mean model edge"),
+                ("line", "95 % interval"),
+            ),
+            caption="Fills grouped by the model's edge after fees at the time of the trade. "
+            "If the edge were real and correctly sized, each dot would sit on its ring. "
+            "Intervals are mean ± 1.96 standard errors.",
+        )
+        parts.append(_section("edges", "Do bigger edges earn more?", h2, lede_d, body))
+
+    # ---- explorer
+    cs = contracts(conn)
+    if cs:
+        d["contracts"] = cs
+        default = max(range(len(cs)), key=lambda i: cs[i]["gap"])
+        mean_gap = sum(c["gap"] for c in cs) / len(cs)
+        options = "".join(
+            f'<option value="{i}"{" selected" if i == default else ""}>'
+            f"{html.escape(c['ticker'])}</option>"
+            for i, c in enumerate(cs)
+        )
+        body = (
+            '<div class="picker"><label for="kb-contract">Contract</label>'
+            f'<select id="kb-contract">{options}</select>'
+            '<span class="status" id="kb-status" aria-live="polite"></span></div>'
+            + _figure(
+                "ts",
+                "Model and market mid over the logged cycles",
+                "Probability of YES · band shows bid to ask",
+                caption="Every logged cycle for one contract. Opens on the contract where the "
+                "model and market disagreed most on average.",
+            )
+        )
+        parts.append(
+            _section(
+                "explorer",
+                "Where did the model and market disagree?",
+                f"The model sat {mean_gap * 100:.1f} ¢ from the market mid on average across "
+                f"{len(cs)} contracts",
+                "Pick a contract to see where the two split and how it settled.",
+                body,
+            )
+        )
+
+    # ---- method
+    parts.append(
+        '<section class="s wrap" id="method" aria-labelledby="h-method">'
+        '<p class="eyebrow">Methodology</p><h2 id="h-method">How this was scored</h2>'
+        '<div class="prose" style="margin-top:24px">'
+        "<p>Each settled contract is scored once, on the last logged cycle that has both a "
+        f"model price and an order book and falls at least {hz} days before "
+        "settlement. Scoring the final cycle would reward whoever is closest to certain minutes "
+        "before the decision.</p>"
+        "<p>The market's forecast is the mid of the best bid and ask at that cycle. Paper "
+        "fills pay 100 ¢ per contract on YES and nothing on NO, minus the price and Kalshi's "
+        "taker fee.</p></div>"
+        '<dl class="kv prose"><dt>Brier score</dt><dd>Mean squared error of the probability; '
+        "0 is perfect.</dd><dt>Log loss</dt><dd>Mean negative log-likelihood of the outcome; "
+        "punishes confident misses hardest.</dd><dt>Bootstrap interval</dt><dd>"
+        f"{BOOTSTRAP_REPS:,} resamples of contracts with replacement, seed {BOOTSTRAP_SEED}; "
+        "2.5th to 97.5th percentile.</dd><dt>Wilson interval</dt><dd>95 % binomial interval "
+        "for the YES rate in a bin.</dd></dl>"
+        '<div class="two"><div><h3>What this shows</h3><ul>'
+        "<li>The pipeline logs prices, scores model and market on the same contracts, and "
+        "accounts for fees end to end.</li>"
+        f"<li>On these {n} contracts, how far apart the two forecasters' scores are, with "
+        "uncertainty.</li></ul></div>"
+        "<div><h3>What it doesn't show</h3><ul>"
+        + (
+            "<li>Real performance: every price and outcome here is synthetic.</li>"
+            if synth
+            else "<li>Performance beyond this log's meetings and contracts.</li>"
+        )
+        + "<li>An edge: the P&L depends on how the fills were generated, and the bins are "
+        "too small to confirm the model's edge.</li>"
+        "<li>Calibration at this n: bins hold too few contracts to judge.</li></ul></div></div>"
+        "</section>"
+    )
+
+    # ---- reproduce
+    env = [
+        ("Data", synth_label if synth else "Paper-trading log (SQLite)"),
+        ("Settled contracts", f"{n}, {s['first_settled']} to {s['last_settled']}"),
+        ("Cycles logged", f"{r.cycles:,}"),
+        ("Scoring horizon", f"≥ {hz} days before settlement"),
+        ("Bootstrap", f"{BOOTSTRAP_REPS:,} resamples, seed {BOOTSTRAP_SEED}"),
+        ("Python", platform.python_version()),
+        ("Commit", f'<span class="mono">{html.escape(short)}</span>'),
+    ]
+    rows = "".join(
+        f'<tr><th scope="row">{html.escape(k)}</th><td>'
+        f"{v if k == 'Commit' else html.escape(v)}</td></tr>"
+        for k, v in env
+    )
+    seed_arg = f" --seed {seed}" if seed else ""
+    parts.append(
+        '<section class="s wrap" id="reproduce" aria-labelledby="h-repro">'
+        '<p class="eyebrow">Reproduce</p><h2 id="h-repro">Run it yourself</h2>'
+        '<div class="codewrap" style="margin-top:24px"><pre><code>'
+        f"git clone {REPO_URL}.git &amp;&amp; cd kalshibot\n"
+        "uv sync\n"
+        + (f"uv run python scripts/make_sample.py --db sample.db{seed_arg}\n" if synth else "")
+        + "uv run python scripts/evaluate.py --db sample.db --html docs/report/index.html"
+        "</code></pre></div>"
+        '<div class="tablewrap env" tabindex="0" role="region" aria-label="Environment" '
+        'style="margin-top:24px"><table><caption>Environment for this build</caption>'
+        '<thead><tr><th scope="col">Field</th><th scope="col" style="text-align:left">Value'
+        f"</th></tr></thead><tbody>{rows}</tbody></table></div></section>"
+    )
+    return _page(parts, d, short, date)
+
+
+def _rounded(v: Any) -> Any:
+    """Round floats to 6 places: enough for every figure, and it hides last-bit libm
+    differences between macOS and Linux so local and CI builds match byte for byte."""
+    if isinstance(v, float):
+        return round(v, 6)
+    if isinstance(v, dict):
+        return {k: _rounded(x) for k, x in v.items()}
+    if isinstance(v, list | tuple):
+        return [_rounded(x) for x in v]
+    return v
+
+
+def _page(parts: list[str], d: dict[str, Any], short: str, date: str) -> str:
+    def kit(name: str) -> str:
+        return (KIT / name).read_text()
+
+    data = json.dumps(_rounded(d), separators=(",", ":"))
+    data = data.replace("</", "<\\/")
+    footer = f'Data from commit <span class="mono">{html.escape(short)}</span>' + (
+        f" · {html.escape(date)}" if date else ""
+    )
+    description = (
+        "Scores a Fed Funds futures model against Kalshi market prices on settled Fed-rate "
+        "contracts and tracks paper P&L after fees."
+    )
+    page = (DOCS / "report.template.html").read_text()
+    for key, value in (
+        ("%%KIT_CSS%%", kit("report.css")),
+        ("%%LOCAL_CSS%%", (DOCS / "report.local.css").read_text()),
+        ("%%KIT_JS%%", kit("report.js") + "\n" + kit("charts.js")),
+        ("%%LOCAL_JS%%", (DOCS / "report.local.js").read_text()),
+        ("%%DESCRIPTION%%", description),
+        ("%%REPO%%", REPO_URL),
+        ("%%FOOTER%%", footer),
+        ("%%BODY%%", "\n".join(parts)),
+        ("%%DATA%%", data),
+    ):
+        page = page.replace(key, value)
     return page
 
 
@@ -796,7 +910,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.html:
         out = Path(args.html)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(render_html(conn, r, s))
+        out.write_text(render_html(conn, r, s, args.horizon_days))
         print(f"wrote {out}")
     if args.card:
         card = build_card(s, command)
