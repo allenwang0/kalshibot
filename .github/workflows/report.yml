@@ -1,12 +1,12 @@
 name: Report
 
-# Builds the evaluation report and publishes it to GitHub Pages. Until a real
-# log is committed this uses the SYNTHETIC sample, and every view says so.
+# Publishes the committed project brief (docs/index.html, built by
+# scripts/build_brief.py from results/replay_cycle.json). No contract has
+# settled yet, so no evaluation report is published; the brief says so.
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,21 +22,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+        with:
+          fetch-depth: 0  # the brief links sources at the commit that last changed them
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: uv sync --locked
-      - run: uv run python scripts/make_sample.py --db sample.db
-      - run: uv run python scripts/evaluate.py --db sample.db --html docs/report/index.html
-      - run: uv run playwright install --with-deps chromium
-      - run: uv run python scripts/screenshot.py docs/report/index.html --out docs/screenshots
-      - uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: docs/screenshots
+      - name: Report kit matches its pinned hashes
+        run: python report-kit/check_kit.py
+      - name: Committed brief matches the committed snapshot
+        run: |
+          python scripts/build_brief.py
+          git diff --exit-code -- docs
+      - name: Publish only the brief
+        run: mkdir _site && cp docs/index.html _site/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/report
+          path: _site
 
   deploy:
     needs: build

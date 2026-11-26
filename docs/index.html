@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kalshibot · Allen Wang</title>
+<meta name="description" content="A paper-trading bot that prices Kalshi Fed-rate contracts from Fed Funds futures and sizes bets after fees. No settled contracts yet, so no edge is claimed.">
+<link rel="canonical" href="https://allenwang0.github.io/kalshibot/">
+<meta name="color-scheme" content="light dark">
+<meta property="og:type" content="article">
+<meta property="og:title" content="kalshibot · Allen Wang">
+<meta property="og:description" content="A paper-trading bot that prices Kalshi Fed-rate contracts from Fed Funds futures and sizes bets after fees. No settled contracts yet, so no edge is claimed.">
+<meta property="og:url" content="https://allenwang0.github.io/kalshibot/">
+<meta property="og:site_name" content="Allen Wang">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}addEventListener("beforeprint",function(){document.querySelectorAll("details").forEach(function(d){d.open=true})});</script>
+<style>
+/* report-kit v1.1 — shared tokens and components for project reports. Inlined by report_kit.py. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px; --space-10: 128px;
+  --page-max: 1120px; --measure: 720px; --gutter: 48px; --section-gap: 112px;
+  --card-gap: 20px; --card-pad: 32px; --radius-card: 24px; --radius-sm: 10px; --nav-h: 44px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --fs-eyebrow: 13px; --fs-hero: clamp(36px, 5.2vw, 60px); --fs-hero-metric: clamp(44px, 7vw, 76px);
+  --fs-h2: clamp(26px, 3.2vw, 36px); --fs-h3: 21px; --fs-card-h: clamp(17px, 1.6vw, 20px);
+  --fs-card-metric: clamp(32px, 4vw, 44px); --fs-body: 17px; --fs-small: 14px; --fs-chart: 13px; --fs-code: 14px;
+  --ease: cubic-bezier(.2, 0, 0, 1); --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --t-fast: 150ms; --t-mid: 220ms; --t-reveal: 320ms;
+  --canvas: #FBFBF9; --surface: #FFFFFF; --surface-sunk: #F2F2F5;
+  --text: #19191B; --text-2: #515154; --text-3: #6E6E73;
+  --border: rgba(0, 0, 0, .08); --grid: rgba(0, 0, 0, .07);
+  --accent: #0066CC; --focus-ring: 0 0 0 3px rgba(0, 102, 204, .45); --data-muted: #A1A1A6;
+  --data-1: #0066CC; --data-2: #E07A00; --data-3: #2A9D8F; --data-4: #8E5BD0; --data-5: #C2410C; --data-6: #5F6B7A;
+  --good: #1F7A4D; --bad: #B3261E; --caution: #8A5A00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0B0B0B; --surface: #161618; --surface-sunk: #1F1F22;
+    --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8A8A8E;
+    --border: rgba(255, 255, 255, .10); --grid: rgba(255, 255, 255, .08);
+    --accent: #3D9BFF; --focus-ring: 0 0 0 3px rgba(61, 155, 255, .55); --data-muted: #636366;
+    --data-1: #3D9BFF; --data-2: #FF9A2E; --data-3: #45C2B3; --data-4: #AC82E6; --data-5: #EE6A33; --data-6: #8896A8;
+    --good: #4CC38A; --bad: #F2726A; --caution: #E0B04A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #0B0B0B; --surface: #161618; --surface-sunk: #1F1F22;
+  --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8A8A8E;
+  --border: rgba(255, 255, 255, .10); --grid: rgba(255, 255, 255, .08);
+  --accent: #3D9BFF; --focus-ring: 0 0 0 3px rgba(61, 155, 255, .55); --data-muted: #636366;
+  --data-1: #3D9BFF; --data-2: #FF9A2E; --data-3: #45C2B3; --data-4: #AC82E6; --data-5: #EE6A33; --data-6: #8896A8;
+  --good: #4CC38A; --bad: #F2726A; --caution: #E0B04A;
+  color-scheme: dark;
+}
+@media (max-width: 1067px) {
+  :root { --measure: 680px; --gutter: 32px; --section-gap: 88px; --card-gap: 16px; --card-pad: 28px; }
+}
+@media (max-width: 734px) {
+  :root { --measure: 100%; --gutter: 20px; --section-gap: 64px; --card-gap: 12px; --card-pad: 20px;
+    --radius-card: 20px; --radius-sm: 8px; --fs-body: 16px; --fs-chart: 12px; }
+}
+
+/* Base */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--canvas); color: var(--text); font: 400 var(--fs-body)/1.6 var(--font);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+p, li { text-wrap: pretty; }
+p { margin: 0 0 var(--space-4); }
+a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); transition: text-decoration-color var(--t-fast) var(--ease); }
+a:hover { text-decoration-color: currentColor; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: var(--focus-ring); border-radius: 4px; }
+[id] { scroll-margin-top: calc(var(--nav-h) + var(--space-5)); }
+code, pre, kbd { font-family: var(--mono); font-size: .88em; }
+.num, table, .tabular, svg text { font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: var(--space-4); top: -60px; padding: var(--space-3) var(--space-4); background: var(--surface);
+  border-radius: var(--radius-sm); z-index: 10; }
+.skip:focus { top: var(--space-3); }
+.wrap { max-width: calc(var(--page-max) + 2 * var(--gutter)); margin: 0 auto; padding: 0 var(--gutter); }
+.prose { max-width: var(--measure); }
+.muted { color: var(--text-2); }
+
+/* Report header (identity row) */
+.report-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4);
+  min-height: 56px; font-size: var(--fs-small); }
+.report-header a { color: var(--text-2); text-decoration: none; padding: var(--space-3) 0; }
+.report-header a:hover { color: var(--text); }
+
+/* Hero */
+.hero { padding-block: var(--space-8); }
+.hero-grid { display: grid; grid-template-columns: 7fr 5fr; gap: var(--space-7); align-items: start; }
+.eyebrow { font-size: var(--fs-eyebrow); font-weight: 600; line-height: 1.2; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-2); margin: 0 0 var(--space-4); }
+.hero-title { font-size: var(--fs-hero); font-weight: 700; line-height: 1.05; letter-spacing: -.025em; }
+.hero-sub { font-size: clamp(19px, 1.9vw, 22px); line-height: 1.45; color: var(--text-2); margin: var(--space-4) 0 var(--space-6); max-width: 34em; }
+.hero-metric { margin: 0 0 var(--space-4); }
+.hero-metric .value { display: block; font-size: var(--fs-hero-metric); font-weight: 700; line-height: 1; letter-spacing: -.03em;
+  color: var(--accent); font-variant-numeric: tabular-nums; }
+.hero-metric .label { display: block; margin-top: var(--space-2); font-size: 19px; font-weight: 600; line-height: 1.35; }
+.hero-support { font-size: var(--fs-body); margin: 0 0 var(--space-2); }
+.hero-context { font-size: var(--fs-small); line-height: 1.45; color: var(--text-2); margin: 0 0 var(--space-5); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-5); border-radius: 999px;
+  font-size: 15px; font-weight: 600; text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface);
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.btn:hover { background: var(--surface-sunk); }
+.btn:active { transform: scale(.98); }
+.btn-primary { background: var(--accent); border-color: transparent; color: var(--canvas); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.hero-figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-5); }
+.hero-figure .card-label { margin-bottom: var(--space-4); }
+
+/* Sticky section nav */
+.report-nav { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(16px); backdrop-filter: saturate(1.8) blur(16px); border-bottom: 1px solid var(--border); }
+.report-nav ul, .report-toc ul { display: flex; gap: 0 var(--space-5); margin: 0 auto; padding: 0 var(--gutter); max-width: calc(var(--page-max) + 2 * var(--gutter));
+  list-style: none; overflow-x: auto; scrollbar-width: none; }
+.report-nav a, .report-toc a { display: flex; align-items: center; min-height: var(--nav-h); white-space: nowrap; font-size: var(--fs-small);
+  color: var(--text-2); text-decoration: none; }
+.report-nav a:hover, .report-toc a:hover { color: var(--text); }
+/* Inline contents (Tier B): the nav's type and divider, not sticky, wraps instead of scrolling */
+.report-toc { border-bottom: 1px solid var(--border); }
+.report-toc ul { flex-wrap: wrap; overflow: visible; }
+
+/* Sections */
+.section { padding-top: var(--section-gap); }
+.section-head { margin: 0 0 var(--space-6); max-width: var(--measure); }
+.section-head h2 { font-size: var(--fs-h2); font-weight: 650; line-height: 1.15; letter-spacing: -.015em; }
+.section-head .eyebrow { margin-bottom: var(--space-3); }
+.section-head p { margin: var(--space-4) 0 0; color: var(--text-2); }
+h3.sub { font-size: var(--fs-h3); font-weight: 600; line-height: 1.25; letter-spacing: -.01em; margin: var(--space-6) 0 var(--space-3); }
+.anchor { margin-left: .3em; color: var(--text-3); text-decoration: none; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+h2:hover .anchor, .anchor:focus-visible { opacity: 1; }
+
+/* Bento grid: 12 / 6 / 1 columns */
+.bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--card-gap); align-items: start; }
+.span-12 { grid-column: span 12; } .span-8 { grid-column: span 8; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; }
+@media (max-width: 1067px) {
+  .bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .span-12, .span-8, .span-4 { grid-column: span 6; } .span-6 { grid-column: span 3; }
+  .hero-grid { grid-template-columns: 1fr; gap: var(--space-6); }
+}
+@media (max-width: 734px) {
+  .bento { grid-template-columns: minmax(0, 1fr); }
+  .bento > * { grid-column: 1 / -1; order: var(--p, 0); }
+  .hero { padding-block: var(--space-6) var(--space-7); }
+}
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--card-pad); min-width: 0; }
+a.card { display: block; color: inherit; text-decoration: none; transition: box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+a.card:hover { box-shadow: 0 6px 24px rgba(0, 0, 0, .06); transform: translateY(-2px); }
+.card-heading { font-size: var(--fs-card-h); font-weight: 600; line-height: 1.3; margin: 0 0 var(--space-3); }
+.card p { font-size: 15px; line-height: 1.55; color: var(--text-2); margin: 0 0 var(--space-3); }
+.card p:last-child { margin-bottom: 0; }
+.card-label { font-size: var(--fs-small); font-weight: 600; color: var(--text-2); margin: 0 0 var(--space-2); }
+.metric { margin: 0 0 var(--space-3); }
+.metric dt { font-size: var(--fs-small); font-weight: 600; color: var(--text-2); margin-bottom: var(--space-2); }
+.metric dd { margin: 0; font-size: var(--fs-card-metric); font-weight: 650; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.metric .unit { font-size: .5em; font-weight: 600; letter-spacing: 0; color: var(--text-2); margin-left: .15em; }
+.reported { display: inline-block; font-size: 12px; font-weight: 600; color: var(--caution); margin-left: var(--space-2); }
+
+/* Comparison bars (HTML, inside cards) */
+.cmp { display: grid; gap: var(--space-3); margin: var(--space-3) 0; }
+.cmp-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-1); font-size: var(--fs-small); }
+.cmp-head { display: flex; justify-content: space-between; gap: var(--space-3); }
+.cmp-head b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cmp-track { height: 8px; border-radius: 4px; background: var(--surface-sunk); overflow: hidden; }
+.cmp-fill { display: block; height: 100%; border-radius: 4px; background: var(--data-muted); }
+.cmp-fill.is-accent { background: var(--accent); }
+
+/* Figure panel */
+.figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--card-pad); }
+.figure + .figure, .figure + p, p + .figure, .note + .figure, .figure + .note { margin-top: var(--space-6); }
+.fig-takeaway { font-size: var(--fs-card-h); font-weight: 600; line-height: 1.3; margin: 0 0 var(--space-1); }
+.fig-question { font-size: var(--fs-small); color: var(--text-2); margin: 0 0 var(--space-5); }
+svg[role=img] { max-width: 100%; height: auto; }
+.fig-chart svg { display: block; width: 100%; overflow: visible; }
+.v-t, .v-p { display: none; }
+@media (max-width: 1067px) { .v-d { display: none; } .v-t { display: block; } }
+@media (max-width: 734px) { .v-t { display: none; } .v-p { display: block; } }
+.figure figcaption { font-size: var(--fs-small); line-height: 1.45; color: var(--text-2); margin-top: var(--space-5); max-width: var(--measure); }
+.figure figcaption p { margin: 0 0 var(--space-2); }
+.fig-chart img, .fig-chart picture, .hero-figure img, .hero-figure picture { display: block; max-width: 100%; height: auto; }
+.fig-chart img, .hero-figure img { border-radius: var(--radius-sm); border: 1px solid var(--border); }
+details.data { margin-top: var(--space-1); font-size: var(--fs-small); }
+details.data summary { cursor: pointer; color: var(--accent); font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
+details.data summary::marker { color: var(--text-3); }
+
+/* SVG chart grammar */
+.c-axis { stroke: var(--text-3); stroke-width: 1; fill: none; }
+.c-grid { stroke: var(--grid); stroke-width: 1; fill: none; }
+.c-floor { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+.c-band { fill: var(--surface-sunk); }
+.c-muted { fill: var(--data-muted); } .c-accent { fill: var(--accent); }
+.c-stroke-muted { stroke: var(--data-muted); fill: none; } .c-stroke-accent { stroke: var(--accent); fill: none; }
+.c-whisker { stroke: var(--text); stroke-width: 1.5; fill: none; }
+.c-label { fill: var(--text-2); font: 500 var(--fs-chart)/1.3 var(--font); }
+.c-value { fill: var(--text); font: 600 var(--fs-chart)/1.3 var(--font); }
+.c-tick { fill: var(--text-3); font: 500 12px/1 var(--font); }
+.c-title { fill: var(--text-2); font: 500 12px/1 var(--font); }
+.c-hi { fill: var(--accent); font-weight: 600; }
+.c-node { fill: var(--surface); stroke: var(--text-3); stroke-width: 1; }
+.c-node-sunk { fill: var(--surface-sunk); stroke: none; }
+.c-free { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 2; }
+.c-line { stroke: var(--text-3); stroke-width: 1; fill: none; }
+.c-line-accent { stroke: var(--accent); stroke-width: 1.5; fill: none; }
+
+/* Technical note, code */
+.note { background: var(--surface-sunk); border-radius: var(--radius-card); padding: var(--space-5); }
+.note > h3 { font-size: var(--fs-card-h); font-weight: 600; margin: 0 0 var(--space-3); }
+.note p:last-child { margin-bottom: 0; }
+pre.code { margin: 0 0 var(--space-4); padding: var(--space-4); background: var(--surface-sunk); border-radius: var(--radius-sm);
+  overflow-x: auto; font-size: var(--fs-code); line-height: 1.55; tab-size: 4; }
+.note pre.code { background: var(--surface); }
+:not(pre) > code { padding: .1em .35em; border-radius: 6px; background: var(--surface-sunk); }
+/* short inline code never breaks inside a token; a pathological long one is clipped, never overflows */
+:not(pre) > code, .nowrap { white-space: nowrap; }
+:not(pre) > code { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; line-height: 1.35; }
+.note :not(pre) > code { background: var(--surface); }
+
+/* Benchmark table */
+.table-wrap { overflow-x: auto; margin: 0 0 var(--space-4);
+  background: linear-gradient(to right, var(--tw-bg, var(--canvas)) 30%, transparent) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--tw-bg, var(--canvas)) 30%, transparent) right / 24px 100% no-repeat local,
+    linear-gradient(to right, var(--grid), transparent) left / 8px 100% no-repeat scroll,
+    linear-gradient(to left, var(--grid), transparent) right / 8px 100% no-repeat scroll; }
+.card, .figure { --tw-bg: var(--surface); }
+table.bench { border-collapse: collapse; width: 100%; font-size: var(--fs-small); }
+.table-caption { font-size: var(--fs-small); font-weight: 600; color: var(--text); margin: 0 0 var(--space-2); }
+table.bench th, table.bench td { padding: var(--space-3) var(--space-3); height: 44px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.bench thead th { font-weight: 600; color: var(--text-2); }
+table.bench tbody th { font-weight: 500; }
+table.bench .num { text-align: right; }
+
+/* Methodology */
+dl.method { display: grid; grid-template-columns: minmax(140px, 220px) minmax(0, 1fr); gap: 0 var(--space-6); margin: 0; max-width: 900px; font-size: 15px; }
+dl.method dt, dl.method dd { padding: var(--space-3) 0; border-top: 1px solid var(--border); margin: 0; }
+dl.method dt { font-weight: 600; color: var(--text-2); }
+@media (max-width: 734px) { dl.method { grid-template-columns: minmax(0, 1fr); } dl.method dd { border-top: 0; padding-top: 0; } }
+
+/* Lists: limitations, reproduce, sources */
+ul.limits { list-style: none; padding: 0; margin: 0; max-width: var(--measure); }
+ul.limits li { position: relative; padding: 0 0 var(--space-4) var(--space-6); }
+ul.limits li::before { content: ""; position: absolute; left: 4px; top: .55em; width: 8px; height: 8px; border-radius: 2px; background: var(--caution); }
+ul.limits b { font-weight: 600; }
+ol.steps { padding: 0; margin: 0; max-width: 900px; list-style: none; counter-reset: step; }
+ol.steps > li { counter-increment: step; position: relative; padding-left: var(--space-7); margin-bottom: var(--space-5); }
+ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface-sunk); font-size: var(--fs-small); font-weight: 600; display: grid; place-items: center; }
+ol.steps p { margin: 0 0 var(--space-2); }
+.ref { font-size: 12px; font-weight: 600; text-decoration: none; vertical-align: super; line-height: 0; margin-left: 2px; white-space: nowrap; }
+.ref:hover { text-decoration: underline; }
+table.bench td.wrap-ok { white-space: normal; min-width: 220px; }
+
+/* Footer */
+.report-footer { margin-top: var(--section-gap); padding: var(--space-6) 0 var(--space-8); border-top: 1px solid var(--border);
+  font-size: 13px; color: var(--text-2); display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); }
+.report-footer a { color: var(--text-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+@media print {
+  :root:not(#print) { --canvas: #fff; --surface: #fff; --surface-sunk: #F2F2F5; --text: #19191B; --text-2: #515154; --text-3: #6E6E73;
+    --accent: #0066CC; --data-muted: #A1A1A6; --border: rgba(0, 0, 0, .15); --grid: rgba(0, 0, 0, .1);
+    --caution: #8A5A00; color-scheme: light; }
+  .report-nav, .skip, .actions, .anchor { display: none !important; }
+  .section { padding-top: var(--space-7); }
+  .figure, .card, .note, pre, table { break-inside: avoid; }
+  .v-d { display: block !important; } .v-t, .v-p { display: none !important; }
+  a.src[href^="http"]::after { content: " (" attr(href) ")"; font-size: 11px; color: var(--text-2); word-break: break-all; }
+  details.data > *:not(summary) { display: block; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="wrap"><nav class="report-header" aria-label="Site"><a href="https://allenwang0.github.io/">← Allen Wang</a><span><a href="https://github.com/allenwang0/kalshibot">Source</a></span></nav></header>
+<main id="main">
+<section class="hero wrap" aria-labelledby="title"><div class="hero-grid"><div><p class="eyebrow">Trading bot · Python · Paper mode</p><h1 class="hero-title" id="title">kalshibot</h1><p class="hero-sub">Prices Kalshi&#x27;s Fed-rate contracts from Fed Funds futures, sizes bets after Kalshi&#x27;s fee, and scores its model against the market once contracts settle.</p><p class="hero-context">No real contract has settled in its log yet, so nothing here shows an edge. The replay chart uses fabricated prices to show what the bot computes.</p><div class="actions"><a href="https://github.com/allenwang0/kalshibot" class="btn btn-primary">Source</a></div></div><div class="hero-figure"><p class="card-label">One paper cycle on the replay fixture, per strike</p><div class="v-d"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 398 368" width="398" height="368" role="img" aria-labelledby="rp-d-title rp-d-desc"><title id="rp-d-title">Model probability against the market&#x27;s bid-ask range per strike</title><desc id="rp-d-desc">Dec 9 · above 3.50%: market 92–96 cents, model 1.00; Dec 9 · above 3.75%: market 44–47 cents, model 0.61; Dec 9 · above 4.00%: market 2–4 cents, model 0.00; Jan 27 · above 3.50%: market 60–64 cents, model 0.76; Jan 27 · above 3.75%: market 18–21 cents, model 0.24. Fabricated replay prices and synthetic futures; not market data.</desc><path class="c-grid" d="M16 54V322"/><text x="16" y="340" class="c-tick" text-anchor="middle">0%</text><path class="c-grid" d="M95.5 54V322"/><text x="95.5" y="340" class="c-tick" text-anchor="middle">25%</text><path class="c-grid" d="M175 54V322"/><text x="175" y="340" class="c-tick" text-anchor="middle">50%</text><path class="c-grid" d="M254.5 54V322"/><text x="254.5" y="340" class="c-tick" text-anchor="middle">75%</text><path class="c-grid" d="M334 54V322"/><text x="334" y="340" class="c-tick" text-anchor="middle">100%</text><text x="0" y="16" class="c-title">Replay fixture: fabricated prices, not a result</text><rect x="0" y="30" width="18" height="10" rx="2" class="c-muted"/><text x="24" y="39" class="c-title">market bid–ask</text><circle cx="137.6" cy="35" r="5" class="c-accent"/><text x="147.6" y="39" class="c-title">model</text><text x="0" y="82" class="c-label">Dec 9 · above 3.50%</text><rect x="308.6" y="91" width="12.7" height="10" rx="2" class="c-muted"/><circle cx="334" cy="96" r="5.5" class="c-accent"/><text x="398" y="100" class="c-value" text-anchor="end">1.00</text><text x="0" y="134" class="c-label">Dec 9 · above 3.75%</text><rect x="155.9" y="143" width="9.5" height="10" rx="2" class="c-muted"/><circle cx="208.5" cy="148" r="5.5" class="c-accent"/><text x="398" y="152" class="c-value" text-anchor="end">0.61</text><text x="0" y="186" class="c-label">Dec 9 · above 4.00%</text><rect x="22.4" y="195" width="6.4" height="10" rx="2" class="c-muted"/><circle cx="16" cy="200" r="5.5" class="c-accent"/><text x="398" y="204" class="c-value" text-anchor="end">0.00</text><text x="0" y="238" class="c-label">Jan 27 · above 3.50%</text><rect x="206.8" y="247" width="12.7" height="10" rx="2" class="c-muted"/><circle cx="258" cy="252" r="5.5" class="c-accent"/><text x="398" y="256" class="c-value" text-anchor="end">0.76</text><text x="0" y="290" class="c-label">Jan 27 · above 3.75%</text><rect x="73.2" y="299" width="9.5" height="10" rx="2" class="c-muted"/><circle cx="92" cy="304" r="5.5" class="c-accent"/><text x="398" y="308" class="c-value" text-anchor="end">0.24</text><text x="398" y="48" class="c-title" text-anchor="end">model</text><text x="334" y="360" class="c-title" text-anchor="end">Probability the contract settles YES</text></svg></div><div class="v-t"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 308" width="640" height="308" role="img" aria-labelledby="rp-t-title rp-t-desc"><title id="rp-t-title">Model probability against the market&#x27;s bid-ask range per strike</title><desc id="rp-t-desc">Dec 9 · above 3.50%: market 92–96 cents, model 1.00; Dec 9 · above 3.75%: market 44–47 cents, model 0.61; Dec 9 · above 4.00%: market 2–4 cents, model 0.00; Jan 27 · above 3.50%: market 60–64 cents, model 0.76; Jan 27 · above 3.75%: market 18–21 cents, model 0.24. Fabricated replay prices and synthetic futures; not market data.</desc><path class="c-grid" d="M182 54V262"/><text x="182" y="280" class="c-tick" text-anchor="middle">0%</text><path class="c-grid" d="M280.5 54V262"/><text x="280.5" y="280" class="c-tick" text-anchor="middle">25%</text><path class="c-grid" d="M379 54V262"/><text x="379" y="280" class="c-tick" text-anchor="middle">50%</text><path class="c-grid" d="M477.5 54V262"/><text x="477.5" y="280" class="c-tick" text-anchor="middle">75%</text><path class="c-grid" d="M576 54V262"/><text x="576" y="280" class="c-tick" text-anchor="middle">100%</text><text x="0" y="16" class="c-title">Replay fixture: fabricated prices, not a result</text><rect x="0" y="30" width="18" height="10" rx="2" class="c-muted"/><text x="24" y="39" class="c-title">market bid–ask</text><circle cx="137.6" cy="35" r="5" class="c-accent"/><text x="147.6" y="39" class="c-title">model</text><text x="166" y="86" class="c-label" text-anchor="end">Dec 9 · above 3.50%</text><rect x="544.5" y="77" width="15.8" height="10" rx="2" class="c-muted"/><circle cx="576" cy="82" r="5.5" class="c-accent"/><text x="640" y="86" class="c-value" text-anchor="end">1.00</text><text x="166" y="126" class="c-label" text-anchor="end">Dec 9 · above 3.75%</text><rect x="355.4" y="117" width="11.8" height="10" rx="2" class="c-muted"/><circle cx="420.5" cy="122" r="5.5" class="c-accent"/><text x="640" y="126" class="c-value" text-anchor="end">0.61</text><text x="166" y="166" class="c-label" text-anchor="end">Dec 9 · above 4.00%</text><rect x="189.9" y="157" width="7.9" height="10" rx="2" class="c-muted"/><circle cx="182" cy="162" r="5.5" class="c-accent"/><text x="640" y="166" class="c-value" text-anchor="end">0.00</text><text x="166" y="206" class="c-label" text-anchor="end">Jan 27 · above 3.50%</text><rect x="418.4" y="197" width="15.8" height="10" rx="2" class="c-muted"/><circle cx="481.9" cy="202" r="5.5" class="c-accent"/><text x="640" y="206" class="c-value" text-anchor="end">0.76</text><text x="166" y="246" class="c-label" text-anchor="end">Jan 27 · above 3.75%</text><rect x="252.9" y="237" width="11.8" height="10" rx="2" class="c-muted"/><circle cx="276.1" cy="242" r="5.5" class="c-accent"/><text x="640" y="246" class="c-value" text-anchor="end">0.24</text><text x="640" y="48" class="c-title" text-anchor="end">model</text><text x="576" y="300" class="c-title" text-anchor="end">Probability the contract settles YES</text></svg></div><div class="v-p"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 368" width="280" height="368" role="img" aria-labelledby="rp-p-title rp-p-desc"><title id="rp-p-title">Model probability against the market&#x27;s bid-ask range per strike</title><desc id="rp-p-desc">Dec 9 · above 3.50%: market 92–96 cents, model 1.00; Dec 9 · above 3.75%: market 44–47 cents, model 0.61; Dec 9 · above 4.00%: market 2–4 cents, model 0.00; Jan 27 · above 3.50%: market 60–64 cents, model 0.76; Jan 27 · above 3.75%: market 18–21 cents, model 0.24. Fabricated replay prices and synthetic futures; not market data.</desc><path class="c-grid" d="M16 54V322"/><text x="16" y="340" class="c-tick" text-anchor="middle">0%</text><path class="c-grid" d="M66 54V322"/><text x="66" y="340" class="c-tick" text-anchor="middle">25%</text><path class="c-grid" d="M116 54V322"/><text x="116" y="340" class="c-tick" text-anchor="middle">50%</text><path class="c-grid" d="M166 54V322"/><text x="166" y="340" class="c-tick" text-anchor="middle">75%</text><path class="c-grid" d="M216 54V322"/><text x="216" y="340" class="c-tick" text-anchor="middle">100%</text><text x="0" y="16" class="c-title">Replay fixture: fabricated prices, not a result</text><rect x="0" y="30" width="18" height="10" rx="2" class="c-muted"/><text x="24" y="39" class="c-title">market bid–ask</text><circle cx="137.6" cy="35" r="5" class="c-accent"/><text x="147.6" y="39" class="c-title">model</text><text x="0" y="82" class="c-label">Dec 9 · above 3.50%</text><rect x="200" y="91" width="8" height="10" rx="2" class="c-muted"/><circle cx="216" cy="96" r="5.5" class="c-accent"/><text x="280" y="100" class="c-value" text-anchor="end">1.00</text><text x="0" y="134" class="c-label">Dec 9 · above 3.75%</text><rect x="104" y="143" width="6" height="10" rx="2" class="c-muted"/><circle cx="137.1" cy="148" r="5.5" class="c-accent"/><text x="280" y="152" class="c-value" text-anchor="end">0.61</text><text x="0" y="186" class="c-label">Dec 9 · above 4.00%</text><rect x="20" y="195" width="4" height="10" rx="2" class="c-muted"/><circle cx="16" cy="200" r="5.5" class="c-accent"/><text x="280" y="204" class="c-value" text-anchor="end">0.00</text><text x="0" y="238" class="c-label">Jan 27 · above 3.50%</text><rect x="136" y="247" width="8" height="10" rx="2" class="c-muted"/><circle cx="168.2" cy="252" r="5.5" class="c-accent"/><text x="280" y="256" class="c-value" text-anchor="end">0.76</text><text x="0" y="290" class="c-label">Jan 27 · above 3.75%</text><rect x="52" y="299" width="6" height="10" rx="2" class="c-muted"/><circle cx="63.8" cy="304" r="5.5" class="c-accent"/><text x="280" y="308" class="c-value" text-anchor="end">0.24</text><text x="280" y="48" class="c-title" text-anchor="end">model</text><text x="216" y="360" class="c-title" text-anchor="end">Probability the contract settles YES</text></svg></div></div></div></section><section class="section wrap" aria-labelledby="how"><div class="section-head"><p class="eyebrow">How it works</p><h2 id="how">Futures imply a probability; the fee decides whether to bet<a class="anchor" href="#how" aria-label="Link to this section">#</a></h2></div><div class="prose"><p><b>On fabricated prices, the model falls outside the market&#x27;s bid–ask range on all five strikes.</b> The replay chart is one offline paper cycle: <code>main.py --once --replay</code> on the replay fixture (recorded API response shapes, fabricated prices) and the synthetic example futures CSV, current upper bound 4.00%. It shows the bot's arithmetic on one snapshot; the gaps are artifacts of made-up prices, not an edge.<a class="ref" href="#evidence-e1" aria-label="Evidence E1">[E1]</a> <a class="src" href="https://github.com/allenwang0/kalshibot/blob/08ae7d51f97ac0b443214484e6ebcbee281bd855/results/replay_cycle.json">Data: replay_cycle.json</a></p></div><details class="data"><summary>Show data table</summary><p class="table-caption">Replay cycle per strike</p><div class="table-wrap" tabindex="0" role="region" aria-label="Replay cycle per strike"><table class="bench" aria-label="Replay cycle per strike"><thead><tr><th scope="col">Strike</th><th scope="col" class="num">Best bid (¢)</th><th scope="col" class="num">Best ask (¢)</th><th scope="col" class="num">Model p</th><th scope="col">Action</th></tr></thead><tbody><tr><th scope="row">Dec 9 · above 3.50%</th><td class="num">92</td><td class="num">96</td><td class="num">1.000</td><td>buy 25</td></tr><tr><th scope="row">Dec 9 · above 3.75%</th><td class="num">44</td><td class="num">47</td><td class="num">0.605</td><td>buy 25</td></tr><tr><th scope="row">Dec 9 · above 4.00%</th><td class="num">2</td><td class="num">4</td><td class="num">0.000</td><td>hold</td></tr><tr><th scope="row">Jan 27 · above 3.50%</th><td class="num">60</td><td class="num">64</td><td class="num">0.761</td><td>buy 25</td></tr><tr><th scope="row">Jan 27 · above 3.75%</th><td class="num">18</td><td class="num">21</td><td class="num">0.239</td><td>hold</td></tr></tbody></table></div></details><div class="prose" style="margin-top:24px"><p>Each KXFED contract asks whether the upper bound of the Fed's target range will be above a strike after a given meeting. Each 30-day Fed Funds future implies an average rate for its month; in a meeting month the rate after the meeting can be solved from that average, and each meeting's expected move is split between the two nearest 25 bp outcomes and chained forward. A contract's model price is the probability of every outcome above its strike.</p><p>Sizing shrinks the model halfway to the market, prices in the fee, and bets a fraction of Kelly:<a class="ref" href="#evidence-e3" aria-label="Evidence E3">[E3]</a></p></div><pre class="code" tabindex="0" aria-label="Sizing rule"><code>p&#x27;   = ask + 0.5 × (model − ask)
+q    = ask + 0.07 × ask × (1 − ask)          # fee per contract
+bet  = bankroll × 0.2 × (p&#x27; − q) / (1 − q)   # 0 if p&#x27; ≤ q
+cap  = $100 per market, $300 across markets
+fee  = ceil(0.07 × C × P × (1 − P)) cents      # taker fill of C contracts at P</code></pre><div class="prose" style="margin-top:24px"><p>In the replay, a 25-contract buy at 47¢ pays a 44¢ fee — 3.7% of the stake, which is why the fee enters the price before Kelly sees it.<a class="ref" href="#evidence-e2" aria-label="Evidence E2">[E2]</a></p><p><b>What would count as evidence.</b> Settled KXFED contracts, each scored on the bot's last price at least 7 days before settlement, with Brier score and log loss for the model against the market's mid. <code>scripts/evaluate.py</code> computes exactly that; the log has no settlements yet.<a class="ref" href="#evidence-e4" aria-label="Evidence E4">[E4]</a></p><p><b>Limits.</b> Futures prices are typed by hand into <code>data/fed_funds_futures.csv</code>; nothing in the code checks how old they are, so a stale file prices every contract from old data.<a class="ref" href="#evidence-e5" aria-label="Evidence E5">[E5]</a> Futures-implied probabilities include a term premium. Paper mode is the default; live trading needs <code>TRADING_MODE=LIVE</code> and API keys. Not financial advice.</p></div></section><section class="section wrap" aria-labelledby="evidence"><div class="section-head"><p class="eyebrow">Sources</p><h2 id="evidence">Reproduce and trace every number<a class="anchor" href="#evidence" aria-label="Link to this section">#</a></h2></div><pre class="code" tabindex="0" aria-label="Reproduce"><code>uv sync
+uv run pytest -q                                  # offline, from recorded responses
+uv run python scripts/replay_snapshot.py             # results/replay_cycle.json
+python3 scripts/build_brief.py --readme README.md    # this page</code></pre><div style="margin-top:40px"></div><p class="table-caption">Evidence</p><div class="table-wrap" tabindex="0" role="region" aria-label="Evidence"><table class="bench" aria-label="Evidence"><thead><tr><th scope="col">ID</th><th scope="col">Claim</th><th scope="col">Source</th><th scope="col">Class</th></tr></thead><tbody><tr><th scope="row"><span id="evidence-e1">E1</span></th><td class="wrap-ok">Model vs market on 5 strikes; 3 paper buys</td><td class="wrap-ok"><a class="src" href="https://github.com/allenwang0/kalshibot/blob/08ae7d51f97ac0b443214484e6ebcbee281bd855/results/replay_cycle.json">results/replay_cycle.json</a></td><td>Verified</td></tr><tr><th scope="row"><span id="evidence-e2">E2</span></th><td class="wrap-ok">Taker fee = ceil(0.07·C·P·(1−P)) cents</td><td class="wrap-ok"><a class="src" href="https://github.com/allenwang0/kalshibot/blob/45a06515b83bb7eb8be9723d4b0fa4df56cd0d46/src/risk.py#L5-L15">src/risk.py:5–15</a></td><td>Verified</td></tr><tr><th scope="row"><span id="evidence-e3">E3</span></th><td class="wrap-ok">Kelly 0.2, shrinkage 0.5, $100 per market, $300 total</td><td class="wrap-ok"><a class="src" href="https://github.com/allenwang0/kalshibot/blob/6bdfba21f6310938c18364e9dbe3a9d979ded5a6/src/config.py#L30-L36">src/config.py:30–36; src/risk.py:25–38</a></td><td>Verified</td></tr><tr><th scope="row"><span id="evidence-e4">E4</span></th><td class="wrap-ok">Scored on the last price at least 7 days before settlement</td><td class="wrap-ok"><a class="src" href="https://github.com/allenwang0/kalshibot/blob/10d287280633e5771e33a09df929ebcc515c22ef/scripts/evaluate.py#L121-L139">scripts/evaluate.py:121–139</a></td><td>Verified</td></tr><tr><th scope="row"><span id="evidence-e5">E5</span></th><td class="wrap-ok">Futures prices are read from a hand-maintained CSV</td><td class="wrap-ok"><a class="src" href="https://github.com/allenwang0/kalshibot/blob/5cd8cbe91791748c6e33aab276570f467369110d/src/models/fedfunds.py#L37">src/models/fedfunds.py:37</a></td><td>Verified</td></tr></tbody></table></div></section>
+</main>
+<footer class="wrap"><div class="report-footer"><span>Generated by <code>scripts/build_brief.py</code> from <code>results/replay_cycle.json</code> · results 08ae7d5</span><span><a href="https://allenwang0.github.io/">Allen Wang</a> · <a href="https://github.com/allenwang0/kalshibot">Source</a></span></div></footer>
+</body>
+</html>
